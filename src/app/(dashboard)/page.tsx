@@ -26,6 +26,11 @@ export default function ProviderDashboardHome() {
     queryFn: getProviderProfile,
   });
   const provider = profileData?.data ?? profileData;
+  const activeServicesCount =
+    provider?.services?.length ||
+    provider?.services_list?.length ||
+    provider?.requestedServices?.length ||
+    0;
 
   const { data: dashboardStats, isLoading: isStatsLoading } = useQuery({
     queryKey: providerQueryKeys.dashboardAllStats,
@@ -39,7 +44,7 @@ export default function ProviderDashboardHome() {
 
   const { data: bookingsData } = useQuery({
     queryKey: providerQueryKeys.bookings("current"),
-    queryFn: () => getProviderBookings("current"),
+    queryFn: () => getProviderBookings({ view: "current", page: 1, limit: 3 }),
   });
   const recentBookings = (bookingsData?.data ?? []).slice(0, 3);
 
@@ -49,7 +54,7 @@ export default function ProviderDashboardHome() {
     return {
       name: `${AR_MONTHS[monthNum] || monthNum} ${item._id?.year || ""}`,
       earnings: item.revenue || 0,
-      orders: item.count || 0,
+      orders: item.count || item.orders || 0,
     };
   });
 
@@ -58,7 +63,7 @@ export default function ProviderDashboardHome() {
     totalBookings: summary.totalOrders ?? 0,
     totalRevenue: summary.totalRevenue ?? 0,
     averageRating: summary.averageRating ?? 0,
-    activeServices: provider?.services?.length || 0,
+    activeServices: activeServicesCount,
   };
 
   const revenueSparkline = chartData.map((d) => d.earnings);

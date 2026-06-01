@@ -1,222 +1,112 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  getProviderProfile,
-  updateProviderWorkingHours,
-} from "@/infrastructure/services/profile.service";
-import { providerQueryKeys } from "@/application/services/prefetch";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Clock, Save, Loader2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertCircle, Clock, Copy, Loader2, RefreshCw, RotateCcw, Save } from "lucide-react";
 import { toast } from "sonner";
-import { DayRow, DayConfig } from "./components/day-row";
+import { providerQueryKeys } from "@/application/services/prefetch";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { WorkingHourItem } from "@/domain/entities/provider.types";
+import { getProviderProfile, updateProviderWorkingHours } from "@/infrastructure/services/profile.service";
+import { DayConfig, DayRow } from "./components/day-row";
 
-/* ─── Types ─── */
 type HoursMap = Record<string, DayConfig>;
+const DAYS = [
+  { id: "Sunday", label: "الأحد" },
+  { id: "Monday", label: "الإثنين" },
+  { id: "Tuesday", label: "الثلاثاء" },
+  { id: "Wednesday", label: "الأربعاء" },
+  { id: "Thursday", label: "الخميس" },
+  { id: "Friday", label: "الجمعة" },
+  { id: "Saturday", label: "السبت" },
+] as const;
+const defaults = (): HoursMap => Object.fromEntries(DAYS.map(({ id }) => [id, { open: "08:00", close: "18:00", isClosed: id === "Friday" }]));
 
-const DAYS_ORDER = [
-  "الأحد",
-  "الإثنين",
-  "الثلاثاء",
-  "الأربعاء",
-  "الخميس",
-  "الجمعة",
-  "السبت",
-];
-
-const DEFAULT_HOURS: HoursMap = Object.fromEntries(
-  DAYS_ORDER.map((d) => [
-    d,
-    { open: "08:00", close: "18:00", isClosed: d === "الجمعة" },
-  ])
-);
-
-/* ─── Page ─── */
 export default function WorkingHoursPage() {
+  const query = useQuery({ queryKey: providerQueryKeys.profile, queryFn: getProviderProfile });
+  if (query.isLoading) return <Loading />;
+  if (query.isError) return <LoadError retry={() => void query.refetch()} />;
+  const normalized = normalizeHours(query.data?.workingHours);
+  return <ScheduleEditor key={JSON.stringify(normalized.hours)} initialHours={normalized.hours} repairedLegacyData={normalized.repairedLegacyData} />;
+}
+
+function ScheduleEditor({ initialHours, repairedLegacyData }: { initialHours: HoursMap; repairedLegacyData: boolean }) {
   const queryClient = useQueryClient();
-  const [hours, setHours] = useState<HoursMap>(DEFAULT_HOURS);
-
-  const { data: profileData, isLoading } = useQuery({
-    queryKey: providerQueryKeys.profile,
-    queryFn: getProviderProfile,
-  });
-
-  useEffect(() => {
-    if (profileData?.data?.workingHours?.length > 0) {
-      const formatted: HoursMap = { ...DEFAULT_HOURS };
-      profileData.data.workingHours.forEach(
-        (wh: { day: string; open: string; close: string; isClosed: boolean }) => {
-          formatted[wh.day] = {
-            open: wh.open,
-            close: wh.close,
-            isClosed: wh.isClosed,
-          };
-        }
-      );
-      queueMicrotask(() => setHours(formatted));
-    }
-  }, [profileData]);
-
-  const updateHoursMut = useMutation({
-    mutationFn: (updatedHours: HoursMap) => {
-      const workingHoursArray = Object.entries(updatedHours).map(
-        ([day, conf]) => ({
-          day,
-          open: conf.open,
-          close: conf.close,
-          isClosed: conf.isClosed,
-        })
-      );
-      return updateProviderWorkingHours(workingHoursArray);
+  const [hours, setHours] = useState(initialHours);
+  const errors = useMemo(() => validate(hours), [hours]);
+  const isDirty = JSON.stringify(hours) !== JSON.stringify(initialHours);
+  const activeDays = DAYS.filter(({ id }) => !hours[id].isClosed).length;
+  const mutation = useMutation({
+    mutationFn: () => updateProviderWorkingHours(toArray(hours)),
+    onSuccess: async () => {
+      toast.success("تم حفظ جدول الدوام.");
+      await queryClient.invalidateQueries({ queryKey: providerQueryKeys.profile });
     },
-    onSuccess: () => {
-      toast.success("تم تحديث أوقات الدوام بنجاح");
-      queryClient.invalidateQueries({ queryKey: providerQueryKeys.profile });
-    },
-    onError: () => toast.error("حدث خطأ أثناء التحديث"),
+    onError: () => toast.error("تعذر حفظ الجدول. راجع الأوقات وحاول مجدداً."),
   });
-
-  const handleToggle = (day: string) => {
-    setHours((prev) => ({
-      ...prev,
-      [day]: { ...prev[day], isClosed: !prev[day].isClosed },
-    }));
+  const update = (day: string, patch: Partial<DayConfig>) => setHours((current) => ({ ...current, [day]: { ...current[day], ...patch } }));
+  const applyToOpenDays = () => {
+    const source = DAYS.find(({ id }) => !hours[id].isClosed)?.id;
+    if (!source) return toast.warning("فعّل يوماً واحداً على الأقل أولاً.");
+    setHours((current) => Object.fromEntries(DAYS.map(({ id }) => [id, current[id].isClosed ? current[id] : { ...current[id], open: current[source].open, close: current[source].close }])));
+    toast.success("تم نسخ التوقيت إلى الأيام المفعلة.");
   };
-
-  const handleTimeChange = (
-    day: string,
-    field: "open" | "close",
-    value: string
-  ) => {
-    setHours((prev) => ({
-      ...prev,
-      [day]: { ...prev[day], [field]: value },
-    }));
-  };
-
-  const handleApplyToAll = () => {
-    // Find first day that is not closed (e.g. Sunday or Monday)
-    const firstActiveDay = DAYS_ORDER.find((d) => !hours[d].isClosed);
-    if (!firstActiveDay) {
-      toast.warning("يرجى تفعيل يوم واحد على الأقل أولاً");
-      return;
-    }
-    const { open, close } = hours[firstActiveDay];
-    setHours((prev) => {
-      const updated = { ...prev };
-      DAYS_ORDER.forEach((day) => {
-        if (!updated[day].isClosed) {
-          updated[day] = { ...updated[day], open, close };
-        }
-      });
-      return updated;
-    });
-    toast.success(`تم نسخ توقيت ${firstActiveDay} (${open} - ${close}) لكافة الأيام المفعلة`);
-  };
-
-  if (isLoading) {
-    return (
-      <div className="space-y-8 animate-pulse max-w-3xl">
-        {/* Page Header Skeleton */}
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-card border border-border/20" />
-          <div className="space-y-2">
-            <div className="h-7 w-32 bg-card rounded-md" />
-            <div className="h-4 w-40 bg-card/60 rounded-md" />
-          </div>
-        </div>
-
-        {/* Card Skeleton */}
-        <Card className="bg-card/40 border border-border/20 rounded-2xl p-6 space-y-4">
-          {[...Array(7)].map((_, i) => (
-            <div key={i} className="h-16 bg-secondary/20 border border-border/20 rounded-2xl p-4 flex items-center gap-4">
-              <div className="h-4 w-28 bg-secondary/40 rounded-md" />
-              <div className="h-9 w-48 bg-secondary/20 border border-border/10 rounded-xl flex-1 mx-4" />
-              <div className="h-8 w-20 bg-secondary/40 rounded-xl" />
-            </div>
-          ))}
-        </Card>
-      </div>
-    );
-  }
-
-  const activeDays = Object.values(hours).filter((d) => !d.isClosed).length;
 
   return (
-    <div className="space-y-8 animate-fade-in-up max-w-3xl">
-      {/* ─── Page Header ─── */}
+    <div className="space-y-6 animate-fade-in max-w-3xl">
       <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-lg shadow-primary/10">
-          <Clock className="w-6 h-6 text-primary" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-black text-gradient tracking-tight">
-            أوقات الدوام
-          </h1>
-          <p className="text-sm text-muted-foreground font-medium mt-0.5">
-            <span className="text-primary font-bold">{activeDays}</span> أيام
-            نشطة من أصل {DAYS_ORDER.length}
-          </p>
-        </div>
+        <span className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center"><Clock className="w-5 h-5 text-primary" /></span>
+        <div><h1 className="text-2xl font-black tracking-tight">أوقات الدوام</h1><p className="text-sm text-muted-foreground mt-0.5"><span className="text-primary font-bold">{activeDays}</span> أيام نشطة من أصل 7</p></div>
       </div>
 
-      {/* ─── Hours Card ─── */}
-      <Card className="glass-v2 border border-border/30 rounded-2xl overflow-hidden">
-        <CardHeader className="pb-4 border-b border-border/20 bg-secondary/20 flex flex-row items-center justify-between gap-4">
-          <CardTitle className="text-base font-bold flex items-center gap-2">
-            <span className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Clock className="w-3.5 h-3.5 text-primary" />
-            </span>
-            تحديد ساعات العمل
-          </CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleApplyToAll}
-            className="h-8 rounded-lg border-primary/20 hover:bg-primary/10 text-primary text-xs font-bold gap-1.5"
-          >
-            نسخ التوقيت لجميع الأيام المفعلة
-          </Button>
+      {repairedLegacyData && <p className="flex gap-2 p-3 rounded-lg border border-amber-500/20 bg-amber-500/5 text-xs text-amber-400"><AlertCircle className="w-4 h-4 shrink-0" /> بيانات الدوام القديمة غير مكتملة. عُرض جدول افتراضي سليم؛ راجعه ثم احفظه لتصحيح السجل.</p>}
+
+      <Card className="glass-v2 border-border/30 rounded-lg overflow-hidden">
+        <CardHeader className="border-b border-border/20 bg-secondary/10 flex flex-row items-center justify-between gap-3">
+          <CardTitle className="text-base flex items-center gap-2"><Clock className="w-4 h-4 text-primary" /> جدول الأسبوع</CardTitle>
+          <Button type="button" variant="outline" size="sm" onClick={applyToOpenDays} className="gap-1.5"><Copy className="w-3.5 h-3.5" /> نسخ التوقيت</Button>
         </CardHeader>
-
         <CardContent className="p-5 space-y-3">
-          {DAYS_ORDER.map((day) => (
-            <DayRow
-              key={day}
-              day={day}
-              config={hours[day]}
-              onToggle={() => handleToggle(day)}
-              onTimeChange={(field, val) => handleTimeChange(day, field, val)}
-            />
-          ))}
-
-          {/* Save footer */}
-          <div className="pt-4 border-t border-border/20 flex items-center justify-between gap-4">
-            <p className="text-[11px] text-muted-foreground/40">
-              التغييرات لا تُحفظ تلقائياً
-            </p>
-            <Button
-              onClick={() => updateHoursMut.mutate(hours)}
-              disabled={updateHoursMut.isPending}
-              className="gap-2 px-8 h-11 bg-primary hover:bg-primary/85 text-primary-foreground rounded-xl font-bold shadow-lg shadow-primary/20 transition-all hover:shadow-primary/30 hover:scale-[1.02] active:scale-100"
-            >
-              {updateHoursMut.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  جاري الحفظ...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  حفظ التعديلات
-                </>
-              )}
-            </Button>
+          {DAYS.map(({ id, label }) => <DayRow key={id} day={label} config={hours[id]} error={errors[id]} onToggle={() => update(id, { isClosed: !hours[id].isClosed })} onTimeChange={(field, value) => update(id, { [field]: value })} />)}
+          <div className="pt-4 border-t border-border/20 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[11px] text-muted-foreground">{Object.keys(errors).length ? "صحح الأوقات المعلّمة قبل الحفظ." : isDirty ? "لديك تعديلات غير محفوظة." : "الجدول محفوظ ومتزامن."}</p>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" disabled={!isDirty || mutation.isPending} onClick={() => setHours(initialHours)} className="gap-1.5"><RotateCcw className="w-4 h-4" /> تراجع</Button>
+              <Button type="button" disabled={!isDirty || Boolean(Object.keys(errors).length) || mutation.isPending} onClick={() => mutation.mutate()} className="gap-1.5">
+                {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} حفظ التعديلات
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
     </div>
   );
 }
+
+function normalizeHours(items?: WorkingHourItem[]) {
+  const hours = defaults();
+  if (!items?.length) return { hours, repairedLegacyData: false };
+  let valid = 0;
+  items.forEach((item) => {
+    if (DAYS.some(({ id }) => id === item.day) && /^\d{2}:\d{2}$/.test(item.open) && /^\d{2}:\d{2}$/.test(item.close)) {
+      hours[item.day] = { open: item.open, close: item.close, isClosed: Boolean(item.isClosed) };
+      valid += 1;
+    }
+  });
+  return { hours, repairedLegacyData: valid !== 7 };
+}
+
+function validate(hours: HoursMap) {
+  return Object.fromEntries(DAYS.flatMap(({ id }) => {
+    const item = hours[id];
+    return !item.isClosed && item.open >= item.close ? [[id, "وقت الإغلاق يجب أن يكون بعد وقت الافتتاح."]] : [];
+  }));
+}
+
+function toArray(hours: HoursMap): WorkingHourItem[] {
+  return DAYS.map(({ id }) => ({ day: id, ...hours[id] }));
+}
+
+function Loading() { return <div className="min-h-[55vh] flex items-center justify-center gap-3 text-sm text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin text-primary" /> جاري تحميل جدول الدوام...</div>; }
+function LoadError({ retry }: { retry: () => void }) { return <div className="min-h-[55vh] flex flex-col items-center justify-center gap-3 text-center"><AlertCircle className="w-7 h-7 text-rose-400" /><p className="text-sm font-bold">تعذر تحميل جدول الدوام</p><Button onClick={retry} className="gap-2"><RefreshCw className="w-4 h-4" /> إعادة المحاولة</Button></div>; }

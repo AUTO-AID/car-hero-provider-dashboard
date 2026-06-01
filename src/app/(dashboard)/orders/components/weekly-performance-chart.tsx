@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import dynamic from "next/dynamic";
 
@@ -17,13 +16,6 @@ interface WeeklyPerformanceChartProps {
 }
 
 export function WeeklyPerformanceChart({ data }: WeeklyPerformanceChartProps) {
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  if (!isMounted) return null;
-
   const option = {
     backgroundColor: "transparent",
     tooltip: {

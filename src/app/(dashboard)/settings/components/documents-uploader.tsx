@@ -1,313 +1,108 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateProviderDocuments } from "@/infrastructure/services/profile.service";
-import { providerQueryKeys } from "@/application/services/prefetch";
-import { api } from "@/infrastructure/api/client";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, CheckCircle2, FileText, Loader2, Trash2, UploadCloud } from "lucide-react";
 import { toast } from "sonner";
-import {
-  FileText,
-  UploadCloud,
-  Trash2,
-  CheckCircle2,
-  AlertTriangle,
-} from "lucide-react";
+import { providerQueryKeys } from "@/application/services/prefetch";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { updateProviderDocuments, uploadProviderDocument } from "@/infrastructure/services/profile.service";
 
-interface DocumentsUploaderProps {
-  registrationStatus: string;
-  rejectionReason: string;
-  initialDocuments: string[];
-}
+const allowedTypes = new Set(["application/pdf", "image/jpeg", "image/png"]);
+const maxSize = 5 * 1024 * 1024;
 
-export function DocumentsUploader({
-  registrationStatus,
-  rejectionReason,
-  initialDocuments,
-}: DocumentsUploaderProps) {
+export function DocumentsUploader({ registrationStatus, rejectionReason, initialDocuments }: { registrationStatus: string; rejectionReason: string; initialDocuments: string[] }) {
   const queryClient = useQueryClient();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const [uploadedDocs, setUploadedDocs] = useState<{ name: string; url: string; size: string; type: string }[]>([]);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [documents, setDocuments] = useState(initialDocuments);
   const [isDragging, setIsDragging] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (initialDocuments && Array.isArray(initialDocuments)) {
-      const docs = initialDocuments.map((url: string, index: number) => {
-        const filename = url.split("/").pop() || `مستند_${index + 1}`;
-        return {
-          name: filename,
-          url,
-          size: "مستند موثق",
-          type: url.endsWith(".pdf") ? "application/pdf" : "image/jpeg",
-        };
-      });
-      setUploadedDocs(docs);
-    }
-  }, [initialDocuments]);
-
-  const updateDocsMut = useMutation({
-    mutationFn: updateProviderDocuments,
-    onSuccess: () => {
-      toast.success("تم تحديث وثائق التفعيل بنجاح");
-      queryClient.invalidateQueries({ queryKey: providerQueryKeys.profile });
-    },
-    onError: () => toast.error("حدث خطأ أثناء تحديث الوثائق في السيرفر"),
-  });
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
+  const persist = async (next: string[]) => {
+    await updateProviderDocuments(next);
+    setDocuments(next);
+    await queryClient.invalidateQueries({ queryKey: providerQueryKeys.profile });
   };
 
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const processFile = async (file: File) => {
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("حجم الملف يجب ألا يتجاوز 5 ميغابايت");
-      return;
-    }
-
-    const toastId = toast.loading(`جاري معالجة ورفع ${file.name}...`);
-    
-    setUploadProgress(10);
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev === null || prev >= 90) {
-          clearInterval(interval);
-          return prev;
-        }
-        return prev + 10;
-      });
-    }, 100);
-
+  const upload = async (file?: File) => {
+    if (!file) return;
+    if (documents.length >= 10) return toast.error("يمكن رفع عشرة مستندات كحد أقصى.");
+    if (!allowedTypes.has(file.type)) return toast.error("الملفات المقبولة هي PDF وJPG وPNG فقط.");
+    if (file.size > maxSize) return toast.error("حجم الملف يجب ألا يتجاوز 5 ميغابايت.");
+    setIsSaving(true);
+    setProgress(0);
+    const toastId = toast.loading("جاري رفع المستند...");
     try {
-      const formDataUpload = new FormData();
-      formDataUpload.append("file", file);
-
-      const response = await api.post("/chat/upload", formDataUpload, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      clearInterval(interval);
-      setUploadProgress(100);
-      
-      const fileUrl = response.data?.fileUrl || response.data?.data?.fileUrl;
-      if (!fileUrl) {
-        throw new Error("Upload endpoint did not return fileUrl");
-      }
-      const newDoc = {
-        name: file.name,
-        url: fileUrl,
-        size: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
-        type: file.type,
-      };
-
-      const updatedList = [...uploadedDocs, newDoc];
-      setUploadedDocs(updatedList);
-
-      const urlsOnly = updatedList.map(d => d.url);
-      await updateDocsMut.mutateAsync(urlsOnly);
-      
-      toast.success("تم رفع المستند وتحديث الملف بنجاح", { id: toastId });
-    } catch (err) {
-      console.error("Upload api error:", err);
-      clearInterval(interval);
-      toast.error("فشل رفع المستند إلى الخادم. لم يتم حفظ أي رابط وهمي.", { id: toastId });
+      const result = await uploadProviderDocument(file, setProgress);
+      await persist([...documents, result.fileUrl]);
+      toast.success("تم رفع المستند وحفظه في ملفك.", { id: toastId });
+    } catch {
+      toast.error("تعذر رفع المستند أو حفظه. لم تتغير قائمة الوثائق.", { id: toastId });
     } finally {
-      setTimeout(() => setUploadProgress(null), 800);
+      setIsSaving(false);
+      setProgress(null);
+      if (inputRef.current) inputRef.current.value = "";
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      processFile(e.target.files[0]);
-    }
-  };
-
-  const handleDeleteDoc = async (indexToDelete: number) => {
+  const remove = async (document: string) => {
+    setIsSaving(true);
     const toastId = toast.loading("جاري حذف المستند...");
-    const updatedList = uploadedDocs.filter((_, i) => i !== indexToDelete);
-    setUploadedDocs(updatedList);
-    
     try {
-      const urlsOnly = updatedList.map(d => d.url);
-      await updateDocsMut.mutateAsync(urlsOnly);
-      toast.success("تم حذف المستند بنجاح", { id: toastId });
-    } catch (err) {
-      toast.error("فشل حذف المستند في السيرفر", { id: toastId });
+      await persist(documents.filter((item) => item !== document));
+      toast.success("تم حذف المستند من ملفك.", { id: toastId });
+    } catch {
+      toast.error("تعذر حذف المستند. بقيت القائمة دون تغيير.", { id: toastId });
+    } finally {
+      setIsSaving(false);
     }
   };
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
-      {/* Verification Status Alert */}
-      {registrationStatus === "approved" && (
-        <div className="flex items-start gap-4 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-emerald-400">
-          <CheckCircle2 className="w-5.5 h-5.5 shrink-0 mt-0.5 text-emerald-400 animate-bounce" />
-          <div>
-            <h4 className="text-sm font-bold">الحساب موثق ومفعل بالكامل ✓</h4>
-            <p className="text-xs text-emerald-400/80 mt-1 leading-relaxed">
-              تهانينا، لقد تم التحقق من أوراقك الثبوتية بنجاح. حسابك نشط الآن ويمكنك استقبال وحجز الطلبات بدون قيود.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {registrationStatus === "pending" && (
-        <div className="flex items-start gap-4 p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 text-amber-400">
-          <AlertTriangle className="w-5.5 h-5.5 shrink-0 mt-0.5 text-amber-400 animate-pulse" />
-          <div>
-            <h4 className="text-sm font-bold">الوثائق قيد التدقيق والمراجعة</h4>
-            <p className="text-xs text-amber-400/80 mt-1 leading-relaxed">
-              يقوم فريق الجودة والأمان بمراجعة المستندات المرفقة وتفعيل الحساب. يستغرق ذلك عادة من 4 إلى 24 ساعة عمل.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {registrationStatus === "rejected" && (
-        <div className="flex items-start gap-4 p-4 rounded-xl border border-rose-500/20 bg-rose-500/5 text-rose-400">
-          <AlertTriangle className="w-5.5 h-5.5 shrink-0 mt-0.5 text-rose-400" />
-          <div>
-            <h4 className="text-sm font-bold">تم رفض الوثائق أو لم تكتمل المراجعة</h4>
-            <p className="text-xs text-rose-400/80 mt-1 leading-relaxed">
-              سبب الرفض: <span className="font-bold underline">{rejectionReason || "يرجى التأكد من رفع الهوية الشخصية وصورة واضحة لورشة العمل."}</span>. الرجاء تعديل الأوراق وإعادة الرفع.
-            </p>
-          </div>
-        </div>
-      )}
-
-      <Card className="glass-v2 border border-border/30 rounded-2xl overflow-hidden shadow-xl">
-        <CardHeader className="pb-4 border-b border-border/20 bg-secondary/10">
-          <CardTitle className="text-base font-bold flex items-center gap-2">
-            <span className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-              <UploadCloud className="w-3.5 h-3.5 text-primary" />
-            </span>
-            رفع الوثائق الرسمية للتوثيق
-          </CardTitle>
-          <CardDescription className="text-xs text-muted-foreground font-medium">
-            يرجى تزويدنا بصورة السجل التجاري، رخصة القيادة أو الهوية الوطنية لتفعيل حسابك ومكافحة الانتحال.
-          </CardDescription>
+    <div className="space-y-5">
+      <Status status={registrationStatus} rejectionReason={rejectionReason} />
+      <Card className="glass-v2 border-border/30 rounded-lg overflow-hidden">
+        <CardHeader className="border-b border-border/20 bg-secondary/10">
+          <CardTitle className="text-base flex items-center gap-2"><UploadCloud className="w-4 h-4 text-primary" /> وثائق التوثيق</CardTitle>
+          <CardDescription className="text-xs">ارفع الهوية أو الترخيص أو السجل التجاري بصيغة PDF أو JPG أو PNG.</CardDescription>
         </CardHeader>
+        <CardContent className="p-6 space-y-5">
+          <button type="button" disabled={isSaving} onClick={() => inputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); setIsDragging(true); }} onDragLeave={() => setIsDragging(false)} onDrop={(event) => { event.preventDefault(); setIsDragging(false); void upload(event.dataTransfer.files[0]); }} className={`w-full min-h-36 border-2 border-dashed rounded-lg flex flex-col items-center justify-center gap-2 transition-colors disabled:opacity-60 ${isDragging ? "border-primary bg-primary/10" : "border-border/50 hover:border-primary/60 hover:bg-secondary/10"}`}>
+            {isSaving ? <Loader2 className="w-7 h-7 text-primary animate-spin" /> : <UploadCloud className="w-7 h-7 text-primary" />}
+            <span className="text-xs font-bold">اسحب الملف هنا أو انقر لاختياره</span>
+            <span className="text-[10px] text-muted-foreground">الحد الأقصى 5 ميغابايت لكل ملف، وحتى 10 ملفات</span>
+            {progress !== null && <span className="text-[11px] text-primary font-bold">تم رفع {progress}%</span>}
+          </button>
+          <input ref={inputRef} type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => void upload(event.target.files?.[0])} className="hidden" />
 
-        <CardContent className="p-6 space-y-6">
-          {/* Drag and Drop Zone */}
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center gap-3 cursor-pointer transition-all ${
-              isDragging
-                ? "border-primary bg-primary/10 scale-[0.99] shadow-inner"
-                : "border-border/40 hover:border-primary/50 hover:bg-secondary/5 bg-secondary/2"
-            }`}
-          >
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileSelect}
-              accept=".jpg,.jpeg,.png,.pdf"
-              className="hidden"
-            />
-
-            <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-              <UploadCloud className="w-6 h-6" />
-            </div>
-
-            <div className="text-center">
-              <p className="text-xs font-bold text-foreground">
-                اسحب وأفلت الملف هنا أو انقر للتصفح
-              </p>
-              <p className="text-[10px] text-muted-foreground mt-1">
-                الملفات المسموح بها: JPG، PNG، PDF (الحد الأقصى: 5 ميغابايت)
-              </p>
-            </div>
-
-            {uploadProgress !== null && (
-              <div className="w-full max-w-xs space-y-1.5 mt-2">
-                <div className="flex items-center justify-between text-[10px] font-bold text-primary">
-                  <span>جاري الرفع...</span>
-                  <span>{uploadProgress}%</span>
-                </div>
-                <div className="h-1 w-full bg-secondary rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
+          <div className="space-y-2">
+            <h3 className="text-xs font-bold text-muted-foreground">المستندات المرفوعة ({documents.length})</h3>
+            {!documents.length ? <p className="p-6 text-center text-xs text-muted-foreground border border-dashed border-border/30 rounded-lg">لم ترفع أي وثيقة بعد.</p> : documents.map((document) => (
+              <div key={document} className="flex items-center justify-between gap-3 p-3 border border-border/25 rounded-lg bg-secondary/10">
+                <a href={resolveDocumentUrl(document)} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-xs font-bold hover:text-primary min-w-0">
+                  <FileText className="w-4 h-4 shrink-0 text-primary" />
+                  <span className="truncate">{document.split("/").pop()}</span>
+                </a>
+                <Button type="button" size="icon" variant="ghost" disabled={isSaving} title="حذف المستند" onClick={() => void remove(document)} className="shrink-0 text-muted-foreground hover:text-rose-400"><Trash2 className="w-4 h-4" /></Button>
               </div>
-            )}
-          </div>
-
-          {/* Uploaded Documents List */}
-          <div className="space-y-3">
-            <h4 className="text-xs font-bold text-muted-foreground/80 flex items-center gap-2">
-              <FileText className="w-3.5 h-3.5 text-primary/60" />
-              المستندات المرفوعة حالياً ({uploadedDocs.length})
-            </h4>
-
-            {uploadedDocs.length === 0 ? (
-              <div className="text-center p-8 rounded-xl border border-dashed border-border/10 bg-secondary/2 text-muted-foreground text-xs font-medium">
-                لا يوجد مستندات مرفوعة حالياً. يرجى رفع الهوية الوطنية والسجل التجاري لبدء تفعيل حسابك.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {uploadedDocs.map((doc, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-3.5 rounded-xl border border-border/25 bg-secondary/10 hover:bg-secondary/20 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      <span className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-                        <FileText className="w-4.5 h-4.5" />
-                      </span>
-                      <div className="overflow-hidden">
-                        <a
-                          href={doc.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs font-bold hover:text-primary transition-colors truncate block max-w-[180px]"
-                          title={doc.name}
-                        >
-                          {doc.name}
-                        </a>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          {doc.size}
-                        </p>
-                      </div>
-                    </div>
-
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => handleDeleteDoc(idx)}
-                      className="w-8 h-8 rounded-lg hover:bg-rose-500/10 hover:text-rose-400 text-muted-foreground/60 transition-colors shrink-0"
-                      title="حذف المستند"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
+            ))}
           </div>
         </CardContent>
       </Card>
     </div>
   );
+}
+
+function Status({ status, rejectionReason }: { status: string; rejectionReason: string }) {
+  if (status === "approved") return <p className="flex gap-2 p-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 text-xs text-emerald-400"><CheckCircle2 className="w-4 h-4 shrink-0" /> حسابك موثق ويمكنك تحديث الوثائق عند الحاجة.</p>;
+  if (status === "rejected") return <p className="flex gap-2 p-4 rounded-lg border border-rose-500/20 bg-rose-500/5 text-xs text-rose-400"><AlertTriangle className="w-4 h-4 shrink-0" /> تعذر اعتماد الوثائق: {rejectionReason || "يرجى مراجعة الملفات وإعادة رفعها."}</p>;
+  return <p className="flex gap-2 p-4 rounded-lg border border-amber-500/20 bg-amber-500/5 text-xs text-amber-400"><AlertTriangle className="w-4 h-4 shrink-0" /> وثائقك قيد المراجعة.</p>;
+}
+
+function resolveDocumentUrl(document: string) {
+  if (/^https?:\/\//i.test(document)) return document;
+  const configured = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
+  try { return `${new URL(configured).origin}${document}`; } catch { return document; }
 }

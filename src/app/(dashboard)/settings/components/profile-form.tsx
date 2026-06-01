@@ -1,187 +1,74 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateProviderProfile } from "@/infrastructure/services/profile.service";
-import { providerQueryKeys } from "@/application/services/prefetch";
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { FormField } from "./form-field";
+import { Building, Loader2, Mail, MapPin, Save, ShieldCheck, User } from "lucide-react";
 import { toast } from "sonner";
-import { Building, User, Mail, MapPin, Loader2, Save, ShieldCheck } from "lucide-react";
+import { providerQueryKeys } from "@/application/services/prefetch";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { updateProviderProfile } from "@/infrastructure/services/profile.service";
+import { FormField } from "./form-field";
 
-interface ProfileFormProps {
-  initialData: {
-    businessName: string;
-    ownerName: string;
-    email: string;
-    address: string;
-    city: string;
-  };
+interface ProfileData {
+  businessName: string;
+  ownerName: string;
+  email: string;
+  address: string;
+  city: string;
+  description: string;
 }
 
-export function ProfileForm({ initialData }: ProfileFormProps) {
+export function ProfileForm({ initialData }: { initialData: ProfileData }) {
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState(initialData);
-
-  useEffect(() => {
-    setFormData(initialData);
-  }, [initialData]);
-
-  const updateProfileMut = useMutation({
-    mutationFn: updateProviderProfile,
-    onSuccess: () => {
-      toast.success("تم تحديث الملف الشخصي بنجاح");
-      queryClient.invalidateQueries({ queryKey: providerQueryKeys.profile });
+  const normalized = useMemo(() => normalize(formData), [formData]);
+  const isDirty = JSON.stringify(normalized) !== JSON.stringify(normalize(initialData));
+  const isValid = normalized.businessName.length >= 2 && normalized.ownerName.length >= 2 && normalized.city.length >= 2;
+  const mutation = useMutation({
+    mutationFn: (data: ProfileData) => {
+      const { email, ...payload } = data;
+      return updateProviderProfile(email ? { ...payload, email } : payload);
     },
-    onError: () => toast.error("حدث خطأ أثناء التحديث"),
+    onSuccess: async () => {
+      toast.success("تم حفظ الملف التجاري");
+      await queryClient.invalidateQueries({ queryKey: providerQueryKeys.profile });
+    },
+    onError: () => toast.error("تعذر حفظ الملف. راجع الحقول وحاول مجدداً."),
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateProfileMut.mutate(formData);
-  };
+  const update = (field: keyof ProfileData, value: string) => setFormData((current) => ({ ...current, [field]: value }));
 
   return (
-    <Card className="glass-v2 border border-border/30 rounded-2xl overflow-hidden shadow-xl animate-fade-in-up">
-      <CardHeader className="pb-4 border-b border-border/20 bg-secondary/10">
-        <CardTitle className="text-base font-bold flex items-center gap-2">
-          <span className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Building className="w-3.5 h-3.5 text-primary" />
-          </span>
-          المعلومات الأساسية لنشاطك التجاري
-        </CardTitle>
-        <CardDescription className="text-xs text-muted-foreground font-medium">
-          تظهر هذه البيانات للزبائن عند قبول طلباتهم على التطبيق
-        </CardDescription>
+    <Card className="glass-v2 border-border/30 rounded-lg overflow-hidden">
+      <CardHeader className="border-b border-border/20 bg-secondary/10">
+        <CardTitle className="text-base flex items-center gap-2"><Building className="w-4 h-4 text-primary" /> المعلومات الأساسية</CardTitle>
+        <CardDescription className="text-xs">تظهر هذه البيانات للعملاء عند عرض نشاطك وخدماتك.</CardDescription>
       </CardHeader>
-
       <CardContent className="p-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={(event) => { event.preventDefault(); if (isValid) mutation.mutate(normalized); }} className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <FormField label="اسم النشاط التجاري (الورشة/السطحة)" icon={Building}>
-              <div className="relative">
-                <Building
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/40 pointer-events-none"
-                  size={16}
-                  aria-hidden
-                />
-                <Input
-                  value={formData.businessName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, businessName: e.target.value })
-                  }
-                  placeholder="اسم ورشتك أو مشروعك"
-                  className="dark-input pr-10"
-                  required
-                />
-              </div>
-            </FormField>
-
-            <FormField label="اسم المالك المسؤول" icon={User}>
-              <div className="relative">
-                <User
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/40 pointer-events-none"
-                  size={16}
-                  aria-hidden
-                />
-                <Input
-                  value={formData.ownerName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, ownerName: e.target.value })
-                  }
-                  placeholder="الاسم الكامل لمالك الورشة"
-                  className="dark-input pr-10"
-                  required
-                />
-              </div>
-            </FormField>
-
-            <FormField label="البريد الإلكتروني" icon={Mail}>
-              <div className="relative">
-                <Mail
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/40 pointer-events-none"
-                  size={16}
-                  aria-hidden
-                />
-                <Input
-                  type="email"
-                  dir="ltr"
-                  value={formData.email}
-                  onChange={(e) =>
-                    setFormData({ ...formData, email: e.target.value })
-                  }
-                  placeholder="example@domain.com"
-                  className="dark-input pr-10 text-left"
-                />
-              </div>
-            </FormField>
-
-            <FormField label="المدينة / المحافظة" icon={MapPin}>
-              <div className="relative">
-                <MapPin
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/40 pointer-events-none"
-                  size={16}
-                  aria-hidden
-                />
-                <Input
-                  value={formData.city}
-                  onChange={(e) =>
-                    setFormData({ ...formData, city: e.target.value })
-                  }
-                  placeholder="دمشق، ريف دمشق، حمص..."
-                  className="dark-input pr-10"
-                  required
-                />
-              </div>
-            </FormField>
-
-            <FormField label="العنوان التفصيلي ومقر العمل الرئيسي" icon={MapPin} full>
-              <div className="relative">
-                <MapPin
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground/40 pointer-events-none"
-                  size={16}
-                  aria-hidden
-                />
-                <Input
-                  value={formData.address}
-                  onChange={(e) =>
-                    setFormData({ ...formData, address: e.target.value })
-                  }
-                  placeholder="اسم الحي، الشارع، علامات مميزة..."
-                  className="dark-input pr-10"
-                />
-              </div>
-            </FormField>
+            <FormField label="اسم النشاط التجاري" icon={Building}><Input value={formData.businessName} onChange={(event) => update("businessName", event.target.value)} required minLength={2} maxLength={120} /></FormField>
+            <FormField label="اسم المالك المسؤول" icon={User}><Input value={formData.ownerName} onChange={(event) => update("ownerName", event.target.value)} required minLength={2} maxLength={120} /></FormField>
+            <FormField label="البريد الإلكتروني" icon={Mail}><Input type="email" dir="ltr" value={formData.email} onChange={(event) => update("email", event.target.value)} maxLength={160} /></FormField>
+            <FormField label="المدينة أو المحافظة" icon={MapPin}><Input value={formData.city} onChange={(event) => update("city", event.target.value)} required minLength={2} maxLength={100} /></FormField>
+            <FormField label="العنوان التفصيلي" icon={MapPin} full><Input value={formData.address} onChange={(event) => update("address", event.target.value)} maxLength={300} /></FormField>
+            <FormField label="وصف النشاط" icon={Building} full><Textarea value={formData.description} onChange={(event) => update("description", event.target.value)} maxLength={1000} rows={4} /></FormField>
           </div>
-
-          {/* Footer actions */}
-          <div className="pt-5 border-t border-border/20 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground/60">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-              <span>تخضع التعديلات لمراجعة الإدارة الأمنية</span>
-            </div>
-            <Button
-              type="submit"
-              disabled={updateProfileMut.isPending}
-              className="gap-2 px-7 h-11 bg-primary hover:bg-primary/85 text-primary-foreground rounded-xl font-bold shadow-lg shadow-primary/20 transition-all hover:shadow-primary/30 hover:scale-[1.02] active:scale-100"
-            >
-              {updateProfileMut.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  جاري الحفظ...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  حفظ التغييرات
-                </>
-              )}
+          <div className="pt-4 border-t border-border/20 flex flex-wrap items-center justify-between gap-3">
+            <span className="flex items-center gap-2 text-[11px] text-muted-foreground"><ShieldCheck className="w-4 h-4 text-emerald-400" /> تحفظ التعديلات مباشرة في ملف نشاطك.</span>
+            <Button type="submit" disabled={!isDirty || !isValid || mutation.isPending} className="gap-2">
+              {mutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} حفظ التغييرات
             </Button>
           </div>
         </form>
       </CardContent>
     </Card>
   );
+}
+
+function normalize(data: ProfileData) {
+  return Object.fromEntries(Object.entries(data).map(([key, value]) => [key, value.trim()])) as unknown as ProfileData;
 }

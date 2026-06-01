@@ -40,12 +40,15 @@ export function RealTimeNotificationProvider({ children }: { children: React.Rea
     // Listen to real-time notifications
     socket.on("notification", (notification: any) => {
       console.log("[Notifications] Received real-time notification:", notification);
+      void queryClient.invalidateQueries({ queryKey: ["provider-bookings"] });
+      void queryClient.invalidateQueries({ queryKey: ["provider-bookings-weekly"] });
       
       if (notification.type === "order.created" || notification.type === "ORDER_CREATED") {
         // Trigger notification sound via Web Audio API (offline friendly)
         try {
+          const soundEnabled = localStorage.getItem("provider_order_sound_enabled") !== "false";
           const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-          if (AudioContextClass) {
+          if (soundEnabled && AudioContextClass) {
             const audioCtx = new AudioContextClass();
             const playTone = (freq: number, duration: number, delay: number) => {
               setTimeout(() => {
@@ -87,7 +90,7 @@ export function RealTimeNotificationProvider({ children }: { children: React.Rea
     return () => {
       socket.off("notification");
     };
-  }, [socket]);
+  }, [queryClient, socket]);
 
   // Fetch full order details when a notification arrives
   useEffect(() => {

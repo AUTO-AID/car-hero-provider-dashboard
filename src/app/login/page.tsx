@@ -28,9 +28,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!isLoading && admin) {
-      router.replace("/");
+      window.location.href = "/";
     }
-  }, [admin, isLoading, router]);
+  }, [admin, isLoading]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -40,11 +40,10 @@ export default function LoginPage() {
     try {
       await login(email.trim(), password);
       toast.success("تم تسجيل الدخول بنجاح");
-      router.replace("/");
+      window.location.href = "/";
     } catch (error: unknown) {
       const message = getLoginErrorMessage(error);
       toast.error(message);
-    } finally {
       setLoading(false);
     }
   };

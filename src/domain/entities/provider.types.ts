@@ -28,6 +28,8 @@ export interface ProviderProfile {
   rejectionReason?: string;
   serviceCategories?: string[];
   services?: string[];
+  servicePrices?: Record<string, number>;
+  serviceAvailability?: Record<string, boolean>;
   workingHours?: WorkingHourItem[];
   documents?: string[];
 }

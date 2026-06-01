@@ -10,6 +10,7 @@ interface DayRowProps {
   config: DayConfig;
   onToggle: () => void;
   onTimeChange: (field: "open" | "close", val: string) => void;
+  error?: string;
 }
 
 export function DayRow({
@@ -17,13 +18,14 @@ export function DayRow({
   config,
   onToggle,
   onTimeChange,
+  error,
 }: DayRowProps) {
   const closed = config.isClosed;
 
   return (
     <div
       className={cn(
-        "flex flex-col sm:flex-row items-center gap-4 p-4 rounded-2xl border transition-all duration-300",
+        "flex flex-col sm:flex-row items-center gap-4 p-4 rounded-lg border transition-all duration-300",
         closed
           ? "bg-secondary/20 border-border/20 opacity-55"
           : "bg-secondary/40 border-border/40 hover:border-primary/25 hover:bg-secondary/60"
@@ -69,6 +71,7 @@ export function DayRow({
           onChange={(e) => onTimeChange("open", e.target.value)}
           className="time-input"
           aria-label={`وقت فتح ${day}`}
+          aria-invalid={Boolean(error)}
         />
         <span className="text-muted-foreground/50 text-xs font-semibold px-1">
           ←
@@ -79,11 +82,13 @@ export function DayRow({
           onChange={(e) => onTimeChange("close", e.target.value)}
           className="time-input"
           aria-label={`وقت إغلاق ${day}`}
+          aria-invalid={Boolean(error)}
         />
       </div>
 
       {/* Toggle button */}
       <button
+        type="button"
         onClick={onToggle}
         aria-label={closed ? `تفعيل ${day}` : `إيقاف ${day}`}
         className={cn(
@@ -105,6 +110,7 @@ export function DayRow({
           </>
         )}
       </button>
+      {error && <p className="w-full sm:w-auto text-[10px] text-rose-400">{error}</p>}
     </div>
   );
 }

@@ -2,125 +2,108 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getProviderProfile } from "@/infrastructure/services/profile.service";
+import { AlertCircle, FileText, Lock, RefreshCw, Settings, User } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { providerQueryKeys } from "@/application/services/prefetch";
-import { Settings, User, FileText, Lock } from "lucide-react";
-import { ProfileForm } from "./components/profile-form";
+import { getAccountProfile, getProviderProfile } from "@/infrastructure/services/profile.service";
 import { DocumentsUploader } from "./components/documents-uploader";
+import { ProfileForm } from "./components/profile-form";
 import { SecurityPreferences } from "./components/security-preferences";
 
+type Tab = "profile" | "documents" | "security";
+
 export default function ProviderSettingsPage() {
-  const [activeTab, setActiveTab] = useState<"profile" | "documents" | "security">("profile");
+  const [activeTab, setActiveTab] = useState<Tab>("profile");
+  const profileQuery = useQuery({ queryKey: providerQueryKeys.profile, queryFn: getProviderProfile });
+  const accountQuery = useQuery({ queryKey: providerQueryKeys.account, queryFn: getAccountProfile });
 
-  const { data: profileData, isLoading } = useQuery({
-    queryKey: providerQueryKeys.profile,
-    queryFn: getProviderProfile,
-  });
-
-  if (isLoading) {
+  if (profileQuery.isLoading || accountQuery.isLoading) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 animate-pulse">
-        <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-          <Settings className="w-6 h-6 text-primary/60 animate-spin" />
-        </div>
-        <p className="text-sm text-muted-foreground font-medium">
-          جاري تحميل الإعدادات والوثائق...
-        </p>
+        <Settings className="w-7 h-7 text-primary animate-spin" />
+        <p className="text-sm text-muted-foreground">جاري تحميل إعدادات الحساب...</p>
       </div>
     );
   }
 
-  const provider = profileData?.data ?? profileData ?? {};
-  
-  const profileInitialData = {
-    businessName: provider.businessName || "",
-    ownerName: provider.ownerName || "",
-    email: provider.email || "",
-    address: provider.address || "",
-    city: provider.city || "",
-  };
+  if (profileQuery.isError || accountQuery.isError) {
+    return (
+      <div className="min-h-[55vh] flex flex-col items-center justify-center gap-4 text-center">
+        <AlertCircle className="w-8 h-8 text-rose-400" />
+        <div>
+          <h1 className="text-lg font-bold">تعذر تحميل إعدادات الحساب</h1>
+          <p className="text-xs text-muted-foreground mt-1">تحقق من الاتصال ثم أعد المحاولة.</p>
+        </div>
+        <Button onClick={() => { void profileQuery.refetch(); void accountQuery.refetch(); }} className="gap-2">
+          <RefreshCw className="w-4 h-4" />
+          إعادة المحاولة
+        </Button>
+      </div>
+    );
+  }
 
-  const registrationStatus = provider.registrationStatus || "pending";
-  const rejectionReason = provider.rejectionReason || "";
-  const initialDocuments = provider.documents || [];
-  const phone = provider.phone || "";
+  const provider = profileQuery.data ?? {};
+  const account = accountQuery.data ?? {};
+  const documents = Array.isArray(provider.documents) ? provider.documents : [];
+  const notifications = account.preferences?.notifications ?? { push: true, sms: true, email: false };
 
   return (
-    <div className="space-y-8 animate-fade-in max-w-4xl">
-      {/* ─── Page Header ─── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-lg shadow-primary/10">
-            <Settings className="w-6 h-6 text-primary" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-black text-gradient tracking-tight">
-              إعدادات الحساب
-            </h1>
-            <p className="text-sm text-muted-foreground font-medium mt-0.5">
-              إدارة معلومات الملف الشخصي، الأوراق الرسمية، والأمان
-            </p>
-          </div>
+    <div className="space-y-7 animate-fade-in max-w-4xl">
+      <div className="flex items-center gap-4">
+        <span className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+          <Settings className="w-5 h-5 text-primary" />
+        </span>
+        <div>
+          <h1 className="text-2xl font-black tracking-tight">إعدادات الحساب</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">إدارة الملف التجاري والوثائق وتفضيلات الأمان</p>
         </div>
       </div>
 
-      {/* ─── Premium Sliding Tabs ─── */}
-      <div className="flex border-b border-border/20 gap-2 p-1 bg-secondary/5 backdrop-blur-md rounded-xl max-w-lg">
-        <button
-          onClick={() => setActiveTab("profile")}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-bold rounded-lg transition-all ${
-            activeTab === "profile"
-              ? "bg-primary text-primary-foreground shadow-md"
-              : "text-muted-foreground hover:text-foreground hover:bg-secondary/10"
-          }`}
-        >
-          <User className="w-4 h-4" />
-          الملف الشخصي
-        </button>
-        <button
-          onClick={() => setActiveTab("documents")}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-bold rounded-lg transition-all relative ${
-            activeTab === "documents"
-              ? "bg-primary text-primary-foreground shadow-md"
-              : "text-muted-foreground hover:text-foreground hover:bg-secondary/10"
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          الوثائق والتوثيق
-          {initialDocuments.length === 0 && (
-            <span className="absolute top-1 left-2 w-2 h-2 rounded-full bg-rose-500 animate-ping" />
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("security")}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-4 text-xs font-bold rounded-lg transition-all ${
-            activeTab === "security"
-              ? "bg-primary text-primary-foreground shadow-md"
-              : "text-muted-foreground hover:text-foreground hover:bg-secondary/10"
-          }`}
-        >
-          <Lock className="w-4 h-4" />
-          الأمان والتنبيهات
-        </button>
+      <div className="grid grid-cols-3 gap-1 p-1 bg-secondary/10 border border-border/20 rounded-lg" role="tablist" aria-label="أقسام الإعدادات">
+        <TabButton active={activeTab === "profile"} onClick={() => setActiveTab("profile")} icon={User} label="الملف الشخصي" />
+        <TabButton active={activeTab === "documents"} onClick={() => setActiveTab("documents")} icon={FileText} label="الوثائق" attention={!documents.length} />
+        <TabButton active={activeTab === "security"} onClick={() => setActiveTab("security")} icon={Lock} label="الأمان والتنبيهات" />
       </div>
 
-      {/* ─── Tab Content ─── */}
       {activeTab === "profile" && (
-        <ProfileForm initialData={profileInitialData} />
-      )}
-
-      {activeTab === "documents" && (
-        <DocumentsUploader
-          registrationStatus={registrationStatus}
-          rejectionReason={rejectionReason}
-          initialDocuments={initialDocuments}
+        <ProfileForm
+          key={provider.updatedAt ?? "profile"}
+          initialData={{
+            businessName: provider.businessName ?? "",
+            ownerName: provider.ownerName ?? "",
+            email: provider.email ?? "",
+            city: provider.city ?? "",
+            address: provider.address ?? "",
+            description: provider.description ?? "",
+          }}
         />
       )}
-
+      {activeTab === "documents" && (
+        <DocumentsUploader
+          key={documents.join("|")}
+          registrationStatus={provider.registrationStatus ?? "pending"}
+          rejectionReason={provider.rejectionReason ?? ""}
+          initialDocuments={documents}
+        />
+      )}
       {activeTab === "security" && (
-        <SecurityPreferences phone={phone} />
+        <SecurityPreferences
+          key={JSON.stringify(notifications)}
+          phone={provider.phone ?? account.phoneNumber ?? ""}
+          isVerified={Boolean(account.isVerified)}
+          initialPreferences={notifications}
+        />
       )}
     </div>
   );
 }
 
+function TabButton({ active, onClick, icon: Icon, label, attention = false }: { active: boolean; onClick: () => void; icon: typeof User; label: string; attention?: boolean }) {
+  return (
+    <button type="button" role="tab" aria-selected={active} onClick={onClick} className={`relative flex items-center justify-center gap-2 min-h-10 px-2 rounded-md text-xs font-bold transition-colors ${active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-secondary/30 hover:text-foreground"}`}>
+      <Icon className="w-4 h-4" />
+      <span>{label}</span>
+      {attention && <span className="absolute top-1.5 left-1.5 w-2 h-2 rounded-full bg-rose-400" aria-label="يتطلب الانتباه" />}
+    </button>
+  );
+}

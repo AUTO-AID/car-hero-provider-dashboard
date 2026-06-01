@@ -5,6 +5,7 @@ import { getProviderWallet, getProviderTransactions } from "@/infrastructure/ser
 
 export const providerQueryKeys = {
   profile: ["provider-profile"] as const,
+  account: ["provider-account"] as const,
   bookings: (tab: "current" | "history") => ["provider-bookings", tab] as const,
   wallet: ["provider-wallet"] as const,
   transactions: ["provider-transactions"] as const,
@@ -31,7 +32,7 @@ export function prefetchProviderRouteData(
     case "/orders":
       return queryClient.prefetchQuery({
         queryKey: providerQueryKeys.bookings("current"),
-        queryFn: () => getProviderBookings("current"),
+        queryFn: () => getProviderBookings({ view: "current", page: 1, limit: 9 }),
       });
     case "/finance":
       return Promise.all([
@@ -41,7 +42,7 @@ export function prefetchProviderRouteData(
         }),
         queryClient.prefetchQuery({
           queryKey: providerQueryKeys.transactions,
-          queryFn: getProviderTransactions,
+          queryFn: () => getProviderTransactions(),
         }),
       ]);
     default:

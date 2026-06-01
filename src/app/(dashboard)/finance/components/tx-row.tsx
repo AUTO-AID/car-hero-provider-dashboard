@@ -1,81 +1,49 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ar } from "date-fns/locale";
-import { cn } from "@/lib/utils";
 import { Transaction } from "@/domain/entities/wallet.types";
+import { cn } from "@/lib/utils";
 
-const isCredit = (type: string) => type === "deposit" || type === "earning";
-
-const TX_LABEL: Record<string, string> = {
-  earning: "أرباح طلب",
-  deposit: "إيداع رصيد",
+const KIND_LABELS: Record<string, string> = {
+  order: "أرباح طلب",
+  payout: "طلب سحب",
   withdrawal: "سحب رصيد",
+  payout_reversal: "إعادة مبلغ سحب",
+  topup: "إيداع رصيد",
 };
 
-interface TxRowProps {
-  tx: Transaction;
-}
+const STATUS_LABELS: Record<string, string> = {
+  completed: "مكتمل",
+  pending: "قيد المراجعة",
+  failed: "مرفوض",
+  reversed: "معكوس",
+};
 
-export function TxRow({ tx }: TxRowProps) {
-  const credit = isCredit(tx.type);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
+export function TxRow({ tx, currency }: { tx: Transaction; currency: string }) {
+  const isCredit = tx.type === "credit";
   return (
-    <div className="flex items-center justify-between px-5 py-4 hover:bg-secondary/30 transition-colors group">
-      {/* Icon + label */}
-      <div className="flex items-center gap-4">
-        <div
-          className={cn(
-            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border",
-            credit
-              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-              : "bg-rose-500/10 border-rose-500/20 text-rose-400"
-          )}
-        >
-          {credit ? <ArrowDownRight className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+    <div className="grid gap-3 px-5 py-4 transition-colors hover:bg-secondary/25 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">
+      <div className="flex items-center gap-3 min-w-0">
+        <div className={cn("size-9 rounded-lg border flex items-center justify-center shrink-0", isCredit ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-rose-500/10 border-rose-500/20 text-rose-400")}>
+          {isCredit ? <ArrowDownRight className="size-4" /> : <ArrowUpRight className="size-4" />}
         </div>
-        <div>
-          <p className="font-semibold text-sm text-foreground">
-            {TX_LABEL[tx.type] ?? "عملية مالية"}
-          </p>
-          <p className="text-[11px] text-muted-foreground/50 mt-0.5">
-            {mounted
-              ? formatDistanceToNow(new Date(tx.createdAt), {
-                  addSuffix: true,
-                  locale: ar,
-                })
-              : "..."}
-          </p>
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-foreground">{KIND_LABELS[tx.referenceType ?? ""] || (isCredit ? "إضافة رصيد" : "خصم رصيد")}</p>
+          <p className="truncate text-[11px] text-muted-foreground/70">{tx.description}</p>
+          <p className="mt-1 text-[10px] font-mono text-muted-foreground/50" dir="ltr">{tx.transactionNumber}</p>
         </div>
       </div>
-
-      {/* Amount + status */}
-      <div className="text-end">
-        <p
-          className={cn(
-            "font-black tabular-nums text-base",
-            credit ? "text-emerald-400" : "text-rose-400"
-          )}
-        >
-          {credit ? "+" : "−"}
-          {(tx.amount || 0).toLocaleString()} ل.س
+      <p className="text-[11px] text-muted-foreground" suppressHydrationWarning>
+        {formatDistanceToNow(new Date(tx.createdAt), { addSuffix: true, locale: ar })}
+      </p>
+      <div className="text-left">
+        <p className={cn("font-black tabular-nums", isCredit ? "text-emerald-400" : "text-rose-400")}>
+          {isCredit ? "+" : "-"}{(tx.amount || 0).toLocaleString("ar-SY", { maximumFractionDigits: 2 })} {currency}
         </p>
-        <span
-          className={cn(
-            "text-[10px] font-bold px-2 py-0.5 rounded-full border mt-1 inline-block",
-            tx.status === "completed"
-              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-              : "bg-amber-500/10 border-amber-500/20 text-amber-400"
-          )}
-        >
-          {tx.status === "completed" ? "مكتمل" : "معلّق"}
+        <span className={cn("inline-flex mt-1 rounded-full border px-2 py-0.5 text-[10px] font-bold", tx.status === "completed" ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : tx.status === "pending" ? "bg-amber-500/10 border-amber-500/20 text-amber-300" : "bg-rose-500/10 border-rose-500/20 text-rose-400")}>
+          {STATUS_LABELS[tx.status] || tx.status}
         </span>
       </div>
     </div>
