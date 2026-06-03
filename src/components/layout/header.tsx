@@ -64,25 +64,7 @@ export function Header({ onRefresh, isRefreshing }: HeaderProps) {
           <span>{now}</span>
         </div>
 
-        {/* Search */}
-        <div className="relative hidden md:block">
-          <Search
-            className={cn(
-              "absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none transition-colors",
-              searchFocused ? "text-primary/60" : "text-muted-foreground/30"
-            )}
-            aria-hidden
-          />
-          <Input
-            placeholder="بحث سريع..."
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-            className={cn(
-              "h-8 bg-secondary/30 border-border/20 text-xs pr-9 rounded-lg placeholder:text-muted-foreground/25 transition-all duration-300",
-              searchFocused ? "w-56 border-primary/30 bg-secondary/60" : "w-40"
-            )}
-          />
-        </div>
+
 
         {/* Refresh (optional) */}
         {onRefresh && (
