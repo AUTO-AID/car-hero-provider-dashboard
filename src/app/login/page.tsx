@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  Car,
   Eye,
   EyeOff,
   Loader2,
@@ -62,12 +61,11 @@ export default function LoginPage() {
       <section className="relative w-full max-w-[520px] animate-fade-in-up">
         {/* ── Logo & Brand ── */}
         <div className="mb-10 text-center">
-          <div className="mx-auto mb-5 flex h-[72px] w-[72px] items-center justify-center rounded-2xl border border-primary/25 bg-primary/10 shadow-xl shadow-primary/15 transition-transform hover:scale-105 duration-300">
-            <Car className="h-9 w-9 text-primary" />
-          </div>
-          <h1 className="text-4xl font-bold tracking-tight text-white">
-            Car<span className="text-primary">Hero</span>
-          </h1>
+          <img
+            src="/logo_carHero.png"
+            alt="Car Hero"
+            className="mx-auto mb-5 h-auto w-[250px] object-contain drop-shadow-[0_12px_32px_rgba(143,92,177,0.38)] transition-transform duration-300 hover:scale-[1.02]"
+          />
           <p className="mt-2.5 text-sm text-muted-foreground">
             لوحة تحكم مزودي الخدمة
           </p>

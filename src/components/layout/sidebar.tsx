@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { prefetchProviderRouteData } from "@/application/services/prefetch";
 import {
   LayoutDashboard, Wrench, Calendar,
-  Settings, LogOut, Car, ChevronLeft,
+  Settings, LogOut, ChevronLeft,
   Wallet, X, Menu, Clock,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -61,14 +61,13 @@ function NavContent({ pathname, admin, logout, onWarmRoute }: NavContentProps) {
     <>
       {/* ── Logo bar ── */}
       <div className="flex items-center gap-3 px-4 h-16 border-b border-border/20 shrink-0">
-        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-primary/30 to-primary/8 border border-primary/20 shadow-lg shadow-primary/15">
-          <Car className="w-[17px] h-[17px] text-primary" />
-        </div>
+        <img
+          src="/logo_carHero.png"
+          alt="Car Hero"
+          className="h-10 w-[128px] shrink-0 object-contain drop-shadow-[0_5px_16px_rgba(143,92,177,0.28)]"
+        />
 
         <div className="flex-1 min-w-0">
-          <h2 className="font-black text-[14px] text-foreground leading-none tracking-tight">
-            Car<span className="text-primary">Hero</span>
-          </h2>
           <p className="text-[10px] text-muted-foreground/60 mt-0.5 font-medium tracking-wide">
             بوابة المزود
           </p>
