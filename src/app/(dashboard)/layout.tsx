@@ -1,31 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+
+import { useClientReady } from "@/application/hooks/use-client-ready";
 import { useAuth } from "@/application/contexts/auth-context";
+import { ShellProvider, useShell } from "@/application/contexts/shell-context";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
-import { Loader2 } from "lucide-react";
+import { LoadingState } from "@/components/ui/states";
 import { prefetchProviderDashboardData } from "@/application/services/prefetch";
 import { RealTimeNotificationProvider } from "@/components/providers/notification-alert-provider";
+import { cn } from "@/lib/utils";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { admin, isLoading } = useAuth();
+  const { provider, isLoading } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useClientReady();
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    if (mounted && !isLoading && !provider) router.replace("/login");
+  }, [provider, isLoading, router, mounted]);
 
   useEffect(() => {
-    if (mounted && !isLoading && !admin) router.replace("/login");
-  }, [admin, isLoading, router, mounted]);
-
-  useEffect(() => {
-    if (!admin) return;
+    if (!provider) return;
 
     const prefetch = () => {
       void prefetchProviderDashboardData(queryClient);
@@ -38,35 +38,62 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
     const timeoutId = window.setTimeout(prefetch, 1200);
     return () => window.clearTimeout(timeoutId);
-  }, [admin, queryClient]);
+  }, [provider, queryClient]);
 
   if (!mounted || isLoading) {
     return (
-      <div className="min-h-screen gradient-bg flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          <p className="text-sm text-muted-foreground">جاري التحميل...</p>
-        </div>
+      <div className="min-h-screen bg-background">
+        <LoadingState className="min-h-screen" />
       </div>
     );
   }
 
-  if (!admin) return null;
+  if (!provider) return null;
 
   return (
     <RealTimeNotificationProvider>
-      <div className="min-h-screen bg-background flex">
-        <Sidebar />
-        <div 
-          className="flex-1 flex flex-col min-h-screen w-full transition-all duration-300"
-          style={{ marginRight: 'var(--sidebar-width)' }}
-        >
-          <Header />
-          <main className="flex-1 p-6 w-full">
-            {children}
-          </main>
-        </div>
-      </div>
+      <ShellProvider>
+        <DashboardShell>{children}</DashboardShell>
+      </ShellProvider>
     </RealTimeNotificationProvider>
+  );
+}
+
+function DashboardShell({ children }: { children: React.ReactNode }) {
+  const { isSidebarCollapsed } = useShell();
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* رابط التخطّي: يسمح لمستخدم الكيبورد بتجاوز ستّة روابط تنقّل في كل
+          تحميل صفحة بدل المرور عليها واحداً واحداً */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:start-3 focus:z-[var(--z-overlay)] focus:rounded-lg focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-primary-foreground"
+      >
+        تخطّي إلى المحتوى
+      </a>
+
+      <Sidebar />
+
+      <div
+        className={cn(
+          "flex min-h-screen flex-col transition-[margin] duration-300",
+          isSidebarCollapsed ? "lg:ms-[76px]" : "lg:ms-[264px]"
+        )}
+      >
+        <Header />
+
+        {/* عرض موحّد لكل المسارات: كانت الصفحات تتفاوت بين بلا حدّ أقصى و
+            max-w-7xl و max-w-4xl و max-w-3xl، فيقفز المحتوى عند كل تنقّل.
+            حُذف أيضاً `overflow-x-hidden` الذي كان يخفي التجاوز بدل معالجته. */}
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mx-auto w-full max-w-[1440px] flex-1 p-4 md:p-6"
+        >
+          {children}
+        </main>
+      </div>
+    </div>
   );
 }

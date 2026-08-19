@@ -12,6 +12,8 @@ export function TabButton({ label, active, onClick }: TabProps) {
   return (
     <button
       onClick={onClick}
+      role="tab"
+      aria-selected={active}
       className={cn(
         "relative pb-3 px-1 text-sm font-bold transition-all duration-300",
         active
@@ -22,7 +24,7 @@ export function TabButton({ label, active, onClick }: TabProps) {
       {label}
       <span
         className={cn(
-          "absolute bottom-0 right-0 left-0 h-[2px] bg-primary rounded-full transition-all duration-300 transform scale-x-0 origin-center",
+          "absolute bottom-0 inset-x-0 h-[3px] bg-primary rounded-t-full transition-all duration-300 transform scale-x-0 origin-center shadow-[0_0_10px_rgba(165,126,216,0.6)]",
           active && "scale-x-100"
         )}
       />

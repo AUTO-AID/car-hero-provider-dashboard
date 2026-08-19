@@ -1,129 +1,129 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef } from "react";
+import { ChevronRight, LogOut, PanelRightClose, PanelRightOpen, X } from "lucide-react";
+
 import { useAuth } from "@/application/contexts/auth-context";
-import { cn } from "@/lib/utils";
+import { useShell } from "@/application/contexts/shell-context";
+import { useRealTimeNotification } from "@/components/providers/notification-alert-provider";
 import { prefetchProviderRouteData } from "@/application/services/prefetch";
-import {
-  LayoutDashboard, Wrench, Calendar,
-  Settings, LogOut, ChevronLeft,
-  Wallet, X, Menu, Clock,
-} from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { NAV_GROUPS, isRouteActive, routeByHref } from "@/lib/routes";
+import { cn } from "@/lib/utils";
+import { AvailabilityToggle } from "./availability-toggle";
 
-const navItems = [
-  {
-    group: "الرئيسية",
-    items: [
-      { href: "/",              icon: LayoutDashboard, label: "لوحة القيادة" },
-      { href: "/orders",        icon: Calendar,        label: "الطلبات والمواعيد" },
-    ],
-  },
-  {
-    group: "الخدمات",
-    items: [
-      { href: "/services",      icon: Wrench,  label: "خدماتي وأسعاري" },
-      { href: "/working-hours", icon: Clock,   label: "أوقات الدوام" },
-    ],
-  },
-  {
-    group: "الحساب",
-    items: [
-      { href: "/finance",   icon: Wallet,   label: "الأرباح والمحفظة" },
-      { href: "/settings",  icon: Settings, label: "إعدادات الحساب" },
-    ],
-  },
-];
+/**
+ * مؤشّر الاتصال — يعكس حالة السوكِت الفعلية.
+ * كانت الشارة تكتب "LIVE" ثابتةً مهما كان الاتصال منقطعاً، وهو أسوأ من غياب
+ * المؤشّر: يطمئن المزوّد إلى أنه يستقبل الطلبات وهو لا يستقبلها.
+ */
+function ConnectionBadge({ collapsed }: { collapsed: boolean }) {
+  const { isConnected } = useRealTimeNotification();
+  const label = isConnected ? "متصل — الطلبات تصل فوراً" : "غير متصل — جارٍ إعادة المحاولة";
 
-/* ─────────────────────────────────────────────────
-   NavContent extracted OUTSIDE Sidebar so React never
-   unmounts/remounts it on route changes.
-───────────────────────────────────────────────── */
+  return (
+    <span
+      role="status"
+      aria-label={label}
+      title={label}
+      className={cn(
+        "flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-bold",
+        isConnected
+          ? "border-success/25 bg-success/10 text-success-soft"
+          : "border-warning/25 bg-warning/10 text-warning-soft"
+      )}
+    >
+      <span className={cn("size-1.5 rounded-full", isConnected ? "bg-success" : "bg-warning")} aria-hidden />
+      {!collapsed && <span>{isConnected ? "متصل" : "منقطع"}</span>}
+    </span>
+  );
+}
+
 interface NavContentProps {
+  navLabel: string;
   pathname: string;
-  admin: { name?: string; businessName?: string } | null;
-  logout: () => void;
+  collapsed: boolean;
+  onNavigate?: () => void;
   onWarmRoute: (href: string) => void;
 }
 
-function NavContent({ pathname, admin, logout, onWarmRoute }: NavContentProps) {
-  const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
-
-  const initials = (admin?.name || admin?.businessName || "م")
-    .charAt(0)
-    .toUpperCase();
+function NavContent({ navLabel, pathname, collapsed, onNavigate, onWarmRoute }: NavContentProps) {
+  const { provider, logout } = useAuth();
+  const initials = (provider?.name || provider?.businessName || "م").charAt(0).toUpperCase();
 
   return (
     <>
-      {/* ── Logo bar ── */}
-      <div className="flex items-center gap-3 px-4 h-16 border-b border-border/20 shrink-0">
-        <img
-          src="/logo_carHero.png"
-          alt="Car Hero"
-          className="h-10 w-[128px] shrink-0 object-contain drop-shadow-[0_5px_16px_rgba(143,92,177,0.28)]"
-        />
-
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] text-muted-foreground/60 mt-0.5 font-medium tracking-wide">
-            بوابة المزود
-          </p>
-        </div>
-
-        <div className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/15 rounded-full px-2 py-0.5">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
-          </span>
-          <span className="text-[9px] font-bold text-emerald-400 tracking-widest uppercase">Live</span>
-        </div>
+      <div
+        className={cn(
+          "flex h-16 shrink-0 items-center gap-2 border-b border-border/60",
+          collapsed ? "justify-center px-2" : "px-4"
+        )}
+      >
+        {collapsed ? (
+          <ConnectionBadge collapsed />
+        ) : (
+          <>
+            <Image
+              src="/logo_carHero.png"
+              alt="كار هيرو"
+              width={112}
+              height={36}
+              className="h-9 w-[112px] shrink-0 object-contain"
+              priority
+            />
+            <span className="flex-1" />
+            <ConnectionBadge collapsed={false} />
+          </>
+        )}
       </div>
 
-      {/* ── Navigation ── */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-5">
-        {navItems.map((group) => (
+      <nav aria-label={navLabel} className="flex-1 space-y-5 overflow-y-auto px-2 py-4">
+        {NAV_GROUPS.map((group) => (
           <div key={group.group}>
-            <p className="px-3 mb-2 text-[9px] font-black uppercase tracking-[0.18em] text-muted-foreground/30">
-              {group.group}
-            </p>
+            {!collapsed && (
+              <p className="mb-2 px-2 text-[11px] font-bold text-muted-foreground">{group.group}</p>
+            )}
+            <ul className="space-y-1">
+              {group.hrefs.map((href) => {
+                const route = routeByHref(href);
+                if (!route) return null;
+                const active = isRouteActive(href, pathname);
 
-            <ul className="space-y-0.5">
-              {group.items.map((item) => {
-                const active = isActive(item.href);
                 return (
-                  <li key={item.href}>
+                  <li key={href}>
                     <Link
-                      href={item.href}
-                      onMouseEnter={() => onWarmRoute(item.href)}
-                      onFocus={() => onWarmRoute(item.href)}
+                      href={href}
+                      onClick={onNavigate}
+                      onMouseEnter={() => onWarmRoute(href)}
+                      onFocus={() => onWarmRoute(href)}
+                      // aria-current: الطريقة الوحيدة التي يعرف بها قارئ الشاشة
+                      // أيّ صفحة معروضة الآن — كانت الحالة النشطة لوناً فقط.
+                      aria-current={active ? "page" : undefined}
+                      title={collapsed ? route.label : undefined}
                       className={cn(
-                        "group relative flex items-center gap-3 px-3 py-2.5 text-[13px] font-medium rounded-xl transition-colors duration-150",
+                        "group relative flex min-h-11 items-center gap-3 rounded-lg text-[13px] font-medium transition-colors",
+                        collapsed ? "justify-center px-0" : "px-3",
                         active
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground/70 hover:text-foreground hover:bg-secondary/60"
+                          ? "bg-primary/12 text-primary"
+                          : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                       )}
                     >
                       {active && (
-                        <span className="absolute right-0 top-1/2 -translate-y-1/2 w-[3px] h-[55%] rounded-l-full bg-primary shadow-[0_0_8px_hsl(275_36%_52%/0.7)]" />
+                        <span className="absolute inset-y-2 start-0 w-[3px] rounded-e-full bg-primary" aria-hidden />
                       )}
-
-                      <item.icon
-                        className={cn(
-                          "w-4 h-4 shrink-0 transition-colors duration-150",
-                          active
-                            ? "text-primary"
-                            : "text-muted-foreground/40 group-hover:text-muted-foreground"
-                        )}
-                        aria-hidden
-                      />
-
-                      <span className="flex-1 truncate">{item.label}</span>
-
-                      {active && (
-                        <ChevronLeft className="w-3 h-3 text-primary/50 shrink-0" />
+                      <route.icon className="size-4 shrink-0" aria-hidden />
+                      {collapsed ? (
+                        <span className="sr-only">{route.label}</span>
+                      ) : (
+                        <span className="flex-1 truncate">{route.label}</span>
+                      )}
+                      {!collapsed && active && (
+                        <ChevronRight className="size-4 shrink-0 rotate-180 opacity-50" aria-hidden />
                       )}
                     </Link>
                   </li>
@@ -134,116 +134,203 @@ function NavContent({ pathname, admin, logout, onWarmRoute }: NavContentProps) {
         ))}
       </nav>
 
-      {/* ── Divider ── */}
-      <div className="mx-4 h-px bg-border/20" />
+      <div className="shrink-0 space-y-2 border-t border-border/60 p-2">
+        <AvailabilityToggle collapsed={collapsed} />
 
-      {/* ── User profile ── */}
-      <div className="p-3 shrink-0">
-        <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-secondary/30 border border-border/20 hover:bg-secondary/60 hover:border-border/40 transition-colors duration-150 group cursor-default">
-          <Avatar className="h-8 w-8 border border-primary/20 shadow-sm shrink-0">
-            <AvatarFallback className="bg-gradient-to-br from-primary/25 to-primary/8 text-primary text-xs font-black">
+        <div
+          className={cn(
+            "flex items-center gap-2 rounded-lg border border-border bg-secondary/30 p-2",
+            collapsed && "justify-center border-transparent bg-transparent p-0"
+          )}
+        >
+          <Avatar className="size-8 shrink-0">
+            <AvatarFallback className="bg-primary/15 text-xs font-bold text-primary">
               {initials}
             </AvatarFallback>
           </Avatar>
 
-          <div className="flex-1 min-w-0">
-            <p className="text-[12px] font-bold text-foreground truncate leading-none">
-              {admin?.name || admin?.businessName || "المزود"}
-            </p>
-            <p className="text-[10px] text-muted-foreground/50 truncate mt-0.5">
-              مزود خدمة
-            </p>
-          </div>
+          {!collapsed && (
+            <>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-bold text-foreground">
+                  {provider?.name || provider?.businessName || "المزوّد"}
+                </p>
+                <p className="truncate text-[11px] text-muted-foreground">مزوّد خدمة</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={logout}
+                aria-label="تسجيل الخروج"
+                title="تسجيل الخروج"
+                className="text-muted-foreground hover:bg-danger/10 hover:text-danger-soft"
+              >
+                <LogOut aria-hidden />
+              </Button>
+            </>
+          )}
+        </div>
 
-          <button
+        {collapsed && (
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={logout}
             aria-label="تسجيل الخروج"
             title="تسجيل الخروج"
-            className="p-1.5 rounded-lg text-muted-foreground/30 hover:text-rose-400 hover:bg-rose-500/10 transition-colors duration-150 opacity-0 group-hover:opacity-100"
+            className="w-full text-muted-foreground hover:bg-danger/10 hover:text-danger-soft"
           >
-            <LogOut className="w-3.5 h-3.5" />
-          </button>
-        </div>
+            <LogOut aria-hidden />
+          </Button>
+        )}
       </div>
     </>
   );
 }
 
-/* ─────────────────────────────────────────────────
-   Sidebar shell — only handles mobile open/close state
-───────────────────────────────────────────────── */
 export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { admin, logout } = useAuth();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const { isSidebarCollapsed, toggleSidebar, isMobileNavOpen, closeMobileNav } = useShell();
   const warmedRoutesRef = useRef(new Set<string>());
+  const drawerRef = useRef<HTMLElement | null>(null);
+  const lastFocusedRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    queueMicrotask(() => setMobileOpen(false));
-  }, [pathname]);
+    closeMobileNav();
+  }, [pathname, closeMobileNav]);
 
-  const warmRoute = useCallback((href: string) => {
-    if (href === pathname || warmedRoutesRef.current.has(href)) return;
+  /* حبس التركيز داخل درج الجوال.
+     كان الدرج مجرّد <aside> يظهر فوق الصفحة: يستطيع مستخدم الكيبورد أن يخرج
+     منه إلى محتوى محجوب بصرياً خلف الطبقة، ولا يعود التركيز إلى مكانه عند
+     الإغلاق، ولا يعلن قارئ الشاشة أنه في نافذة منفصلة. */
+  useEffect(() => {
+    if (!isMobileNavOpen) return;
 
-    // Disable prefetching on hover in development to prevent overloading the server with compilation & API requests
-    if (process.env.NODE_ENV === "development") return;
+    lastFocusedRef.current = document.activeElement as HTMLElement | null;
+    const drawer = drawerRef.current;
+    const focusables = () =>
+      Array.from(
+        drawer?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        ) ?? []
+      ).filter((element) => element.offsetParent !== null);
 
-    warmedRoutesRef.current.add(href);
-    router.prefetch(href);
+    focusables()[0]?.focus();
 
-    const prefetchData = () => {
-      void prefetchProviderRouteData(queryClient, href);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeMobileNav();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const items = focusables();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
 
-    if (typeof window.requestIdleCallback === "function") {
-      window.requestIdleCallback(prefetchData, { timeout: 2000 });
-      return;
-    }
+    document.addEventListener("keydown", onKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const restoreFocusTo = lastFocusedRef.current;
 
-    window.setTimeout(prefetchData, 500);
-  }, [pathname, queryClient, router]);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      restoreFocusTo?.focus();
+    };
+  }, [isMobileNavOpen, closeMobileNav]);
+
+  const warmRoute = useCallback(
+    (href: string) => {
+      if (href === pathname || warmedRoutesRef.current.has(href)) return;
+      // معطّل في التطوير: يُشعل إعادة تصريف Next لكل مسار عند المرور فوقه
+      if (process.env.NODE_ENV === "development") return;
+
+      warmedRoutesRef.current.add(href);
+      router.prefetch(href);
+
+      const prefetchData = () => void prefetchProviderRouteData(queryClient, href);
+      if (typeof window.requestIdleCallback === "function") {
+        window.requestIdleCallback(prefetchData, { timeout: 2000 });
+        return;
+      }
+      window.setTimeout(prefetchData, 500);
+    },
+    [pathname, queryClient, router]
+  );
 
   return (
     <>
-      {/* Mobile toggle */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        aria-label="فتح القائمة"
-        className="fixed top-3.5 right-3.5 z-[60] lg:hidden bg-card/90 backdrop-blur-md border border-border/40 rounded-xl p-2.5 shadow-xl text-foreground hover:bg-secondary/80 transition-colors"
-      >
-        <Menu className="w-4 h-4" />
-      </button>
-
-      {/* Mobile overlay */}
-      {mobileOpen && (
+      {isMobileNavOpen && (
         <div
-          className="fixed inset-0 z-[55] bg-background/70 backdrop-blur-sm lg:hidden"
-          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 z-[var(--z-scrim)] bg-background/70 backdrop-blur-sm lg:hidden"
+          onClick={closeMobileNav}
+          aria-hidden
         />
       )}
 
-      {/* Mobile sidebar */}
       <aside
+        ref={drawerRef}
+        id="mobile-nav"
+        role="dialog"
+        aria-modal="true"
+        aria-label="قائمة التنقّل"
+        aria-hidden={!isMobileNavOpen}
+        data-open={isMobileNavOpen}
         className={cn(
-          "fixed inset-y-0 right-0 z-[58] flex flex-col bg-card/95 backdrop-blur-2xl border-l border-border/30 transition-transform duration-300 ease-out w-[264px] shadow-2xl lg:hidden",
-          mobileOpen ? "translate-x-0" : "translate-x-full"
+          "nav-drawer fixed inset-y-0 start-0 z-[var(--z-drawer)] flex w-[280px] flex-col border-e border-border bg-card shadow-elev-3 lg:hidden",
+          !isMobileNavOpen && "pointer-events-none"
         )}
       >
-        <button
-          onClick={() => setMobileOpen(false)}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={closeMobileNav}
           aria-label="إغلاق القائمة"
-          className="absolute top-4 left-4 p-1.5 rounded-lg text-muted-foreground/50 hover:bg-secondary/60 hover:text-foreground transition-colors"
+          className="absolute top-4 end-3 z-10 text-muted-foreground"
         >
-          <X className="w-4 h-4" />
-        </button>
-        <NavContent pathname={pathname} admin={admin} logout={logout} onWarmRoute={warmRoute} />
+          <X aria-hidden />
+        </Button>
+        <NavContent
+          navLabel="التنقّل الرئيسي"
+          pathname={pathname}
+          collapsed={false}
+          onNavigate={closeMobileNav}
+          onWarmRoute={warmRoute}
+        />
       </aside>
 
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex fixed inset-y-0 right-0 z-50 flex-col w-[var(--sidebar-width)] bg-card/75 backdrop-blur-2xl border-l border-border/20 shadow-xl">
-        <NavContent pathname={pathname} admin={admin} logout={logout} onWarmRoute={warmRoute} />
+      <aside
+        aria-label="الشريط الجانبي"
+        className={cn(
+          "fixed inset-y-0 start-0 z-[var(--z-sidebar)] hidden flex-col border-e border-border bg-card transition-[width] duration-300 lg:flex",
+          isSidebarCollapsed ? "w-[76px]" : "w-[264px]"
+        )}
+      >
+        <NavContent navLabel="التنقّل الجانبي" pathname={pathname} collapsed={isSidebarCollapsed} onWarmRoute={warmRoute} />
+
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={toggleSidebar}
+          aria-label={isSidebarCollapsed ? "توسيع الشريط الجانبي" : "طيّ الشريط الجانبي"}
+          title={isSidebarCollapsed ? "توسيع الشريط الجانبي" : "طيّ الشريط الجانبي"}
+          className="absolute top-1/2 -end-3.5 hidden -translate-y-1/2 rounded-full border border-border bg-card text-muted-foreground shadow-elev-2 hover:bg-secondary hover:text-foreground lg:flex"
+        >
+          {isSidebarCollapsed ? <PanelRightClose aria-hidden /> : <PanelRightOpen aria-hidden />}
+        </Button>
       </aside>
     </>
   );

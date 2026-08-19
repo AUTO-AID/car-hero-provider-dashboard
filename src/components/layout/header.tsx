@@ -1,101 +1,82 @@
 "use client";
 
-import { Bell, Search, CalendarDays, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { cn } from "@/lib/utils";
+import { CalendarDays, Menu, RefreshCw } from "lucide-react";
 
-/* ── Page metadata map ── */
-const pageTitles: Record<string, { title: string; desc: string; icon: string }> = {
-  "/":              { title: "لوحة القيادة",      desc: "نظرة عامة على أداء نشاطك",       icon: "🏠" },
-  "/orders":        { title: "الطلبات والمواعيد",  desc: "متابعة وإدارة طلبات العملاء",    icon: "📋" },
-  "/services":      { title: "خدماتي وأسعاري",    desc: "إدارة الخدمات المقدمة وأسعارها", icon: "🔧" },
-  "/working-hours": { title: "أوقات الدوام",       desc: "تحديد ساعات العمل اليومية",      icon: "🕐" },
-  "/finance":       { title: "الأرباح والمحفظة",   desc: "المعاملات المالية ورصيد المحفظة", icon: "💰" },
-  "/settings":      { title: "إعدادات الحساب",    desc: "إدارة معلومات ملفك الشخصي",      icon: "⚙️" },
-};
+import { Button } from "@/components/ui/button";
+import { useShell } from "@/application/contexts/shell-context";
+import { useClientReady } from "@/application/hooks/use-client-ready";
+import { formatDate } from "@/lib/format";
+import { matchRoute } from "@/lib/routes";
+import { NotificationsMenu } from "./notifications-menu";
 
-interface HeaderProps {
-  onRefresh?: () => void;
-  isRefreshing?: boolean;
-}
-
-export function Header({ onRefresh, isRefreshing }: HeaderProps) {
+/**
+ * الهيدر هو **المالك الوحيد لعنوان الصفحة**.
+ *
+ * كان العنوان يظهر مرّتين في كل مسار: هنا وفي رأس مكتوب داخل الصفحة نفسها،
+ * فيبتلع نحو 120px من الطية الأولى ويترك في الصفحة عنوانَي `<h1>` يربكان
+ * قارئ الشاشة. بيانات المسار تأتي الآن من `lib/routes.ts` نفسه الذي يغذّي
+ * الشريط الجانبي، بدل خريطة ثانية بإيموجي وتسميات مختلفة قليلاً.
+ */
+export function Header() {
   const pathname = usePathname();
-  const page = pageTitles[pathname] ?? pageTitles["/"];
-  const [notifCount] = useState(3);
-  const [searchFocused, setSearchFocused] = useState(false);
+  const mounted = useClientReady();
+  const { openMobileNav, isMobileNavOpen, refreshAll, isRefreshing } = useShell();
 
-  const now = new Date().toLocaleDateString("ar-SA", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+  const route = matchRoute(pathname);
+  const today = formatDate(new Date(), "weekday");
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 sm:h-[68px] items-center justify-between border-b border-border/20 bg-background/70 px-4 sm:px-6 backdrop-blur-2xl gap-4">
+    <header className="sticky top-0 z-[var(--z-header)] flex h-16 items-center justify-between gap-3 border-b border-border bg-background/85 px-4 backdrop-blur-xl sm:px-6">
+      <div className="flex min-w-0 items-center gap-3">
+        {/* زرّ القائمة داخل الهيدر: كان زرّاً عائماً بـ z-60 يغطّي عنوان
+            الصفحة على الشاشات الصغيرة. */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={openMobileNav}
+          aria-label="فتح قائمة التنقّل"
+          aria-expanded={isMobileNavOpen}
+          aria-controls="mobile-nav"
+          className="lg:hidden"
+        >
+          <Menu aria-hidden />
+        </Button>
 
-      {/* ── Left: page identity ── */}
-      <div className="flex items-center gap-3 min-w-0">
-        {/* emoji icon badge */}
-        <div className="hidden sm:flex w-9 h-9 items-center justify-center rounded-xl bg-primary/8 border border-primary/15 text-lg shrink-0 select-none">
-          {page.icon}
-        </div>
+        <span className="hidden size-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary sm:flex">
+          <route.icon className="size-4" aria-hidden />
+        </span>
 
         <div className="min-w-0">
-          <h1 className="text-sm sm:text-[15px] font-bold tracking-tight text-foreground truncate leading-none">
-            {page.title}
+          <h1 className="truncate text-[15px] leading-tight font-bold text-foreground">
+            {route.title}
           </h1>
-          <p className="text-[11px] text-muted-foreground/50 mt-0.5 font-medium hidden sm:block truncate">
-            {page.desc}
+          <p className="hidden truncate text-[11px] text-muted-foreground sm:block">
+            {route.description}
           </p>
         </div>
       </div>
 
-      {/* ── Right: actions ── */}
-      <div className="flex items-center gap-2 shrink-0">
+      <div className="flex shrink-0 items-center gap-1.5">
+        <span className="hidden items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-[11px] whitespace-nowrap text-muted-foreground xl:flex">
+          <CalendarDays className="size-3.5 shrink-0 text-primary" aria-hidden />
+          <span suppressHydrationWarning>{mounted ? today : ""}</span>
+        </span>
 
-        {/* Date pill */}
-        <div className="hidden xl:flex items-center gap-1.5 text-[11px] text-muted-foreground/50 bg-secondary/30 border border-border/20 rounded-lg px-3 py-1.5 whitespace-nowrap">
-          <CalendarDays className="w-3 h-3 shrink-0 text-primary/50" />
-          <span>{now}</span>
-        </div>
+        {/* زرّ تحديث واحد يعمل فعلاً. كان الهيدر يستقبل `onRefresh` ولا يمرّره
+            التخطيط أبداً، فصنعت كل صفحة زرّها الخاص. */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={refreshAll}
+          aria-label="تحديث بيانات اللوحة"
+          title="تحديث بيانات اللوحة"
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <RefreshCw className={isRefreshing ? "animate-spin" : undefined} aria-hidden />
+        </Button>
 
-
-
-        {/* Refresh (optional) */}
-        {onRefresh && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onRefresh}
-            title="تحديث البيانات"
-            className="h-8 w-8 rounded-lg hover:bg-secondary/60 text-muted-foreground/50 hover:text-foreground"
-          >
-            <RefreshCw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
-          </Button>
-        )}
-
-        {/* Notifications */}
-        <div className="relative">
-          <Button
-            variant="ghost"
-            size="icon"
-            title={`${notifCount} إشعارات جديدة`}
-            className="h-8 w-8 rounded-lg hover:bg-secondary/60 text-muted-foreground/50 hover:text-foreground"
-          >
-            <Bell className="w-3.5 h-3.5" />
-          </Button>
-
-          {notifCount > 0 && (
-            <span className="absolute -top-0.5 -left-0.5 h-4 min-w-4 flex items-center justify-center rounded-full bg-primary text-[9px] font-black text-primary-foreground px-1 shadow-md shadow-primary/40 pointer-events-none animate-scale-in">
-              {notifCount}
-            </span>
-          )}
-        </div>
+        <NotificationsMenu />
       </div>
     </header>
   );

@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { Power, PowerOff } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 
 export type DayConfig = { open: string; close: string; isClosed: boolean };
 
@@ -13,104 +13,72 @@ interface DayRowProps {
   error?: string;
 }
 
-export function DayRow({
-  day,
-  config,
-  onToggle,
-  onTimeChange,
-  error,
-}: DayRowProps) {
-  const closed = config.isClosed;
+export function DayRow({ day, config, onToggle, onTimeChange, error }: DayRowProps) {
+  const open = !config.isClosed;
+  const errorId = `day-${day}-error`;
 
   return (
     <div
       className={cn(
-        "flex flex-col sm:flex-row items-center gap-4 p-4 rounded-lg border transition-all duration-300",
-        closed
-          ? "bg-secondary/20 border-border/20 opacity-55"
-          : "bg-secondary/40 border-border/40 hover:border-primary/25 hover:bg-secondary/60"
+        "flex flex-col gap-3 rounded-xl border p-3.5 transition-colors sm:flex-row sm:items-center sm:gap-4",
+        error
+          ? "border-danger/40 bg-danger/5"
+          : open
+            ? "border-border bg-secondary/20"
+            : "border-border/50 bg-transparent"
       )}
     >
-      {/* Day name + status dot */}
-      <div className="flex items-center gap-3 w-32 shrink-0">
+      {/* مفتاح واحد بدل زرّ "تفعيل/إيقاف" الذي كان يغيّر لونه ونصّه معاً:
+          الحالة الآن مقروءة من شكل المفتاح مباشرة، لا من نصّ الزر */}
+      <div className="flex w-full items-center gap-3 sm:w-36 sm:shrink-0">
+        <Switch
+          checked={open}
+          onCheckedChange={onToggle}
+          aria-label={`دوام يوم ${day}`}
+        />
         <span
           className={cn(
-            "relative flex h-2.5 w-2.5 shrink-0"
-          )}
-        >
-          {!closed && (
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-60" />
-          )}
-          <span
-            className={cn(
-              "relative inline-flex rounded-full h-2.5 w-2.5",
-              closed ? "bg-rose-500/60" : "bg-primary"
-            )}
-          />
-        </span>
-        <span
-          className={cn(
-            "font-bold text-sm",
-            closed ? "text-muted-foreground/50" : "text-foreground"
+            "text-[15px] font-semibold",
+            open ? "text-foreground" : "text-muted-foreground"
           )}
         >
           {day}
         </span>
       </div>
 
-      {/* Time inputs */}
-      <div
-        className={cn(
-          "flex items-center gap-2 flex-1 justify-center",
-          closed && "pointer-events-none opacity-25 grayscale"
-        )}
-      >
-        <input
-          type="time"
-          value={config.open}
-          onChange={(e) => onTimeChange("open", e.target.value)}
-          className="time-input"
-          aria-label={`وقت فتح ${day}`}
-          aria-invalid={Boolean(error)}
-        />
-        <span className="text-muted-foreground/50 text-xs font-semibold px-1">
-          ←
-        </span>
-        <input
-          type="time"
-          value={config.close}
-          onChange={(e) => onTimeChange("close", e.target.value)}
-          className="time-input"
-          aria-label={`وقت إغلاق ${day}`}
-          aria-invalid={Boolean(error)}
-        />
-      </div>
-
-      {/* Toggle button */}
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-label={closed ? `تفعيل ${day}` : `إيقاف ${day}`}
-        className={cn(
-          "flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all w-24 justify-center border",
-          closed
-            ? "bg-primary/10 border-primary/20 text-primary hover:bg-primary/20"
-            : "bg-rose-500/10 border-rose-500/20 text-rose-400 hover:bg-rose-500/20"
-        )}
-      >
-        {closed ? (
+      <div className="flex flex-1 items-center justify-start gap-2 sm:justify-center">
+        {open ? (
           <>
-            <Power className="w-3 h-3" />
-            تفعيل
+            <input
+              type="time"
+              value={config.open}
+              onChange={(event) => onTimeChange("open", event.target.value)}
+              className="time-input"
+              aria-label={`وقت فتح ${day}`}
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? errorId : undefined}
+            />
+            <span className="px-1 text-xs text-muted-foreground">إلى</span>
+            <input
+              type="time"
+              value={config.close}
+              onChange={(event) => onTimeChange("close", event.target.value)}
+              className="time-input"
+              aria-label={`وقت إغلاق ${day}`}
+              aria-invalid={Boolean(error)}
+              aria-describedby={error ? errorId : undefined}
+            />
           </>
         ) : (
-          <>
-            <PowerOff className="w-3 h-3" />
-            إيقاف
-          </>
+          <span className="text-sm text-muted-foreground">مغلق طوال اليوم</span>
         )}
-      </button>
-      {error && <p className="w-full sm:w-auto text-[10px] text-rose-400">{error}</p>}
+      </div>
+
+      {error && (
+        <p id={errorId} role="alert" className="text-xs text-danger-soft sm:max-w-[10rem] sm:text-end">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

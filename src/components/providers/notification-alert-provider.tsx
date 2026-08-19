@@ -1,10 +1,12 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { useSocket } from "@/application/hooks/use-socket";
-import { useQueryClient } from "@tanstack/react-query";
-import { api } from "@/infrastructure/api/client";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { providerQueryKeys } from "@/application/services/prefetch";
+import { useSocket } from "@/application/hooks/use-socket";
+import { Booking } from "@/domain/entities/booking.types";
+import { cancelBooking, getBookingDetails, updateBookingStatus } from "@/infrastructure/services/bookings.service";
 import {
   Dialog,
   DialogContent,
@@ -14,121 +16,138 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Money } from "@/components/ui/money";
 import { Bell, MapPin, User, DollarSign, Clock, FileText, Check, X } from "lucide-react";
 
-interface RealTimeNotificationContextType {
-  activeNotification: any | null;
-  closeNotification: () => void;
+interface OrderNotification {
+  type: string;
+  title?: string;
+  body?: string;
+  data?: {
+    orderId?: string;
+    [key: string]: unknown;
+  };
 }
+
+export interface NotificationEntry {
+  id: string;
+  type: string;
+  title: string;
+  body?: string;
+  orderId?: string;
+  receivedAt: number;
+  read: boolean;
+}
+
+interface RealTimeNotificationContextType {
+  activeNotification: OrderNotification | null;
+  closeNotification: () => void;
+  /** آخر ما وصل عبر السوكِت — يغذّي جرس الإشعارات في الهيدر */
+  notifications: NotificationEntry[];
+  unreadCount: number;
+  markAllRead: () => void;
+  clearNotifications: () => void;
+  /** حالة السوكِت الفعلية — تغذّي مؤشّر الاتصال في الشريط الجانبي */
+  isConnected: boolean;
+}
+
+const MAX_HISTORY = 20;
+
+const TYPE_TITLES: Record<string, string> = {
+  "order.created": "طلب حجز جديد",
+  ORDER_CREATED: "طلب حجز جديد",
+  "order.cancelled": "أُلغي طلب",
+  "order.updated": "تحديث على طلب",
+};
+
+type AudioWindow = Window &
+  typeof globalThis & {
+    webkitAudioContext?: typeof AudioContext;
+  };
 
 const RealTimeNotificationContext = createContext<RealTimeNotificationContextType | null>(null);
 
 export function RealTimeNotificationProvider({ children }: { children: React.ReactNode }) {
-  const { socket } = useSocket();
+  const { socket, isConnected } = useSocket();
   const queryClient = useQueryClient();
-  
-  const [activeNotification, setActiveNotification] = useState<any | null>(null);
-  const [orderData, setOrderData] = useState<any | null>(null);
-  const [loadingOrder, setLoadingOrder] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationEntry[]>([]);
+  const [activeNotification, setActiveNotification] = useState<OrderNotification | null>(null);
   const [isPendingAction, setIsPendingAction] = useState(false);
+  const [isDeclining, setIsDeclining] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
+
+  const activeOrderId = activeNotification?.data?.orderId;
+  const orderQuery = useQuery({
+    queryKey: providerQueryKeys.bookingDetails(activeOrderId ?? ""),
+    queryFn: () => getBookingDetails(activeOrderId!),
+    enabled: Boolean(activeOrderId),
+  });
+
+  const orderData = orderQuery.data;
+
+  const invalidateOrderData = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: providerQueryKeys.bookingsRoot });
+    void queryClient.invalidateQueries({ queryKey: providerQueryKeys.weeklyBookings });
+    void queryClient.invalidateQueries({ queryKey: providerQueryKeys.dashboardAllStats });
+    void queryClient.invalidateQueries({ queryKey: providerQueryKeys.wallet });
+    if (activeOrderId) {
+      void queryClient.invalidateQueries({ queryKey: providerQueryKeys.bookingDetails(activeOrderId) });
+    }
+  }, [activeOrderId, queryClient]);
 
   useEffect(() => {
     if (!socket) return;
 
-    console.log("[Notifications] Listening for notifications on socket...");
+    const handleNotification = (notification: OrderNotification) => {
+      invalidateOrderData();
 
-    // Listen to real-time notifications
-    socket.on("notification", (notification: any) => {
-      console.log("[Notifications] Received real-time notification:", notification);
-      void queryClient.invalidateQueries({ queryKey: ["provider-bookings"] });
-      void queryClient.invalidateQueries({ queryKey: ["provider-bookings-weekly"] });
-      
+      // كل إشعار يُحفظ في السجلّ، لا الطلبات الجديدة فقط: الجرس كان يعرض
+      // العدد 0 دائماً لأن لا شيء كان يُخزَّن أصلاً.
+      setNotifications((current) =>
+        [
+          {
+            id: `${notification.type}-${notification.data?.orderId ?? ""}-${Date.now()}`,
+            type: notification.type,
+            title: notification.title || TYPE_TITLES[notification.type] || "إشعار جديد",
+            body: notification.body,
+            orderId: notification.data?.orderId,
+            receivedAt: Date.now(),
+            read: false,
+          },
+          ...current,
+        ].slice(0, MAX_HISTORY)
+      );
+
       if (notification.type === "order.created" || notification.type === "ORDER_CREATED") {
-        // Trigger notification sound via Web Audio API (offline friendly)
-        try {
-          const soundEnabled = localStorage.getItem("provider_order_sound_enabled") !== "false";
-          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-          if (soundEnabled && AudioContextClass) {
-            const audioCtx = new AudioContextClass();
-            const playTone = (freq: number, duration: number, delay: number) => {
-              setTimeout(() => {
-                try {
-                  const osc = audioCtx.createOscillator();
-                  const gainNode = audioCtx.createGain();
-                  osc.connect(gainNode);
-                  gainNode.connect(audioCtx.destination);
-                  osc.type = "sine";
-                  osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-                  gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-                  gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration - 0.02);
-                  osc.start();
-                  osc.stop(audioCtx.currentTime + duration);
-                } catch (e) {
-                  console.warn("[Notifications] Audio context play error:", e);
-                }
-              }, delay);
-            };
-            // Dual-tone high-quality chime sequence
-            playTone(880, 0.45, 0);     // A5 note
-            playTone(698.46, 0.6, 180); // F5 note
-          }
-        } catch (soundErr) {
-          console.error("[Notifications] Audio synthesized chime error:", soundErr);
-        }
+        playOrderChime();
 
-        // Display toast alert
-        toast.info(notification.title || "طلب حجز جديد 📦", {
+        toast.info(notification.title || "طلب حجز جديد", {
           description: notification.body || "لديك طلب خدمة جديد يحتاج لموافقتك",
           duration: 10000,
         });
 
-        // Set active notification to show modal
         setActiveNotification(notification);
+        setIsDeclining(false);
+        setDeclineReason("");
       }
-    });
-
-    return () => {
-      socket.off("notification");
     };
-  }, [queryClient, socket]);
 
-  // Fetch full order details when a notification arrives
-  useEffect(() => {
-    if (activeNotification?.data?.orderId) {
-      setLoadingOrder(true);
-      setOrderData(null);
-      
-      api.get(`/orders/${activeNotification.data.orderId}`)
-        .then((res) => {
-          const fetched = res.data?.data ?? res.data;
-          setOrderData(fetched);
-        })
-        .catch((err) => {
-          console.error("[Notifications] Failed to fetch order details:", err);
-          toast.error("فشل جلب تفاصيل الطلب الوارد");
-        })
-        .finally(() => {
-          setLoadingOrder(false);
-        });
-    } else {
-      setOrderData(null);
-    }
-  }, [activeNotification]);
+    socket.on("notification", handleNotification);
+    return () => {
+      socket.off("notification", handleNotification);
+    };
+  }, [invalidateOrderData, socket]);
 
   const handleAccept = async () => {
     if (!orderData?._id) return;
     setIsPendingAction(true);
     try {
-      await api.patch(`/orders/${orderData._id}/status`, { status: "accepted" });
-      toast.success("✅ تم قبول الطلب بنجاح");
-      
-      // Invalidate React Query lists to refresh dashboard data
-      queryClient.invalidateQueries({ queryKey: ["provider-bookings"] });
-      queryClient.invalidateQueries({ queryKey: ["provider-dashboard"] });
-      
+      await updateBookingStatus(orderData._id, "accepted");
+      toast.success("تم قبول الطلب بنجاح");
+      invalidateOrderData();
       closeNotification();
-    } catch (err) {
-      console.error(err);
+    } catch {
       toast.error("فشل قبول الطلب، يرجى المحاولة مرة أخرى");
     } finally {
       setIsPendingAction(false);
@@ -137,19 +156,26 @@ export function RealTimeNotificationProvider({ children }: { children: React.Rea
 
   const handleDecline = async () => {
     if (!orderData?._id) return;
+
+    if (!isDeclining) {
+      setIsDeclining(true);
+      return;
+    }
+
+    const reason = declineReason.trim();
+    if (reason.length < 5) {
+      toast.error("يرجى كتابة سبب واضح لرفض الطلب");
+      return;
+    }
+
     setIsPendingAction(true);
     try {
-      // Transitioning status to cancelled
-      await api.patch(`/orders/${orderData._id}/status`, { status: "cancelled" });
-      toast.info("تم رفض الطلب وإلغاؤه");
-      
-      queryClient.invalidateQueries({ queryKey: ["provider-bookings"] });
-      queryClient.invalidateQueries({ queryKey: ["provider-dashboard"] });
-      
+      await cancelBooking(orderData._id, reason);
+      toast.info("تم رفض الطلب وتسجيل السبب");
+      invalidateOrderData();
       closeNotification();
-    } catch (err) {
-      console.error(err);
-      toast.error("فشل رفض الطلب");
+    } catch {
+      toast.error("فشل رفض الطلب، يرجى المحاولة مرة أخرى");
     } finally {
       setIsPendingAction(false);
     }
@@ -157,23 +183,45 @@ export function RealTimeNotificationProvider({ children }: { children: React.Rea
 
   const closeNotification = () => {
     setActiveNotification(null);
-    setOrderData(null);
+    setIsDeclining(false);
+    setDeclineReason("");
   };
 
+  const loadingOrder = orderQuery.isFetching;
+
+  const markAllRead = useCallback(
+    () => setNotifications((current) => current.map((item) => ({ ...item, read: true }))),
+    []
+  );
+  const clearNotifications = useCallback(() => setNotifications([]), []);
+  const unreadCount = notifications.reduce((total, item) => total + (item.read ? 0 : 1), 0);
+
+  const contextValue = useMemo(
+    () => ({
+      activeNotification,
+      closeNotification,
+      notifications,
+      unreadCount,
+      markAllRead,
+      clearNotifications,
+      isConnected,
+    }),
+    [activeNotification, notifications, unreadCount, markAllRead, clearNotifications, isConnected]
+  );
+
   return (
-    <RealTimeNotificationContext.Provider value={{ activeNotification, closeNotification }}>
+    <RealTimeNotificationContext.Provider value={contextValue}>
       {children}
 
-      {/* Sleek Dark-themed Real-time Order Popup Modal */}
       <Dialog open={!!activeNotification} onOpenChange={(open) => !open && closeNotification()}>
-        <DialogContent className="bg-card/95 border-border/50 rounded-2xl max-w-md backdrop-blur-xl text-right" showCloseButton={!isPendingAction}>
-          <DialogHeader className="text-right">
-            <DialogTitle className="text-white text-base font-bold flex items-center gap-2 justify-end">
-              <span>طلب حجز جديد وارد!</span>
-              <Bell className="w-5 h-5 text-primary animate-bounce" />
+        <DialogContent className="max-w-md" showCloseButton={!isPendingAction}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bell className="size-5 text-primary" aria-hidden />
+              طلب حجز جديد
             </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground mt-1">
-              لديك طلب خدمة جديد يحتاج لموافقتك أو رفضك الفوري
+            <DialogDescription>
+              يحتاج هذا الطلب قبولك أو رفضك الآن.
             </DialogDescription>
           </DialogHeader>
 
@@ -183,76 +231,74 @@ export function RealTimeNotificationProvider({ children }: { children: React.Rea
               <span className="text-xs text-muted-foreground">جاري تحميل تفاصيل الطلب...</span>
             </div>
           ) : orderData ? (
-            <div className="space-y-4 py-2">
-              {/* Order Details Grid */}
-              <div className="bg-secondary/20 p-4 rounded-xl border border-border/30 space-y-3">
-                <div className="flex items-center justify-between text-xs border-b border-border/20 pb-2">
-                  <span className="font-bold text-white tabular-nums">{orderData.orderNumber}</span>
-                  <span className="text-muted-foreground">رقم الطلب</span>
-                </div>
-
-                <div className="space-y-2.5 text-xs text-right">
-                  <div className="flex items-center gap-2 justify-end text-foreground font-semibold">
-                    <span className="text-white">{orderData.serviceName || "خدمة سيارات"}</span>
-                    <Clock className="w-3.5 h-3.5 text-primary" />
-                  </div>
-
-                  <div className="flex items-center gap-2 justify-end text-muted-foreground">
-                    <span>{orderData.user?.fullName || "عميل غير معروف"}</span>
-                    <User className="w-3.5 h-3.5 text-muted-foreground/60" />
-                  </div>
-
-                  <div className="flex items-center gap-2 justify-end text-muted-foreground">
-                    <span className="truncate max-w-[280px]" dir="rtl">
-                      {orderData.address || "موقع محدد مسبقاً"}
-                    </span>
-                    <MapPin className="w-3.5 h-3.5 text-muted-foreground/60" />
-                  </div>
-
-                  {orderData.userNotes && (
-                    <div className="flex items-start gap-2 justify-end text-muted-foreground bg-black/10 p-2.5 rounded-lg border border-border/10">
-                      <span className="text-[11px] leading-relaxed text-right flex-1">{orderData.userNotes}</span>
-                      <FileText className="w-3.5 h-3.5 text-muted-foreground/60 mt-0.5 shrink-0" />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Price Tag */}
-              <div className="flex items-center justify-between bg-primary/5 p-3.5 rounded-xl border border-primary/20">
-                <span className="text-lg font-black text-primary tabular-nums">
-                  {(orderData.servicePrice || orderData.total || 0).toLocaleString()} ل.س
-                </span>
-                <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
-                  المبلغ الإجمالي
-                  <DollarSign className="w-3.5 h-3.5 text-muted-foreground/60" />
-                </span>
-              </div>
-            </div>
+            <OrderDetails order={orderData} />
           ) : (
-            <div className="py-6 text-center text-xs text-rose-400">
-              فشل تحميل تفاصيل الطلب، يرجى المحاولة مرة أخرى أو مراجعة قائمة الطلبات.
+            <div className="py-6 text-center text-xs text-danger-soft" role="alert">
+              تعذّر تحميل تفاصيل الطلب. راجع قائمة الطلبات مباشرةً.
             </div>
           )}
 
-          <DialogFooter className="flex flex-row-reverse gap-2.5 mt-2 justify-start">
-            <Button
-              disabled={loadingOrder || isPendingAction || !orderData}
-              onClick={handleAccept}
-              className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-bold h-9 rounded-xl gap-1.5 shadow-md shadow-emerald-500/10"
-            >
-              <Check className="w-4 h-4" />
-              قبول الطلب
-            </Button>
-            <Button
-              variant="outline"
-              disabled={loadingOrder || isPendingAction || !orderData}
-              onClick={handleDecline}
-              className="flex-1 border-rose-500/20 hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 font-bold h-9 rounded-xl gap-1.5"
-            >
-              <X className="w-4 h-4" />
-              رفض الطلب
-            </Button>
+          {isDeclining && (
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-muted-foreground">سبب الرفض</label>
+              <Textarea
+                value={declineReason}
+                onChange={(event) => setDeclineReason(event.target.value)}
+                placeholder="مثال: المزود غير متاح لهذا الموعد"
+                rows={3}
+                disabled={isPendingAction}
+              />
+            </div>
+          )}
+
+          <DialogFooter>
+            {isDeclining ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isPendingAction}
+                onClick={() => {
+                  setIsDeclining(false);
+                  setDeclineReason("");
+                }}
+                className="flex-1"
+              >
+                تراجع
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                variant="destructive-soft"
+                disabled={loadingOrder || isPendingAction || !orderData}
+                onClick={handleDecline}
+                className="flex-1"
+              >
+                <X aria-hidden /> رفض الطلب
+              </Button>
+            )}
+
+            {isDeclining ? (
+              <Button
+                type="button"
+                variant="destructive"
+                loading={isPendingAction}
+                disabled={loadingOrder || !orderData || declineReason.trim().length < 5}
+                onClick={handleDecline}
+                className="flex-1"
+              >
+                تأكيد الرفض
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                loading={isPendingAction}
+                disabled={loadingOrder || !orderData}
+                onClick={handleAccept}
+                className="flex-1"
+              >
+                {!isPendingAction && <Check aria-hidden />} قبول الطلب
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -260,8 +306,92 @@ export function RealTimeNotificationProvider({ children }: { children: React.Rea
   );
 }
 
+function OrderDetails({ order }: { order: Booking }) {
+  const amount = order.payableAmount ?? order.total ?? 0;
+
+  return (
+    <div className="space-y-3">
+      {/* كان هذا القسم يقلب ترتيب كل صفّ يدوياً (`justify-end` + الأيقونة بعد
+          النص) لمحاكاة RTL. المستند عربي الاتجاه أصلاً، فالترتيب الطبيعي يكفي. */}
+      <dl className="space-y-2.5 rounded-xl border bg-secondary/30 p-4 text-xs">
+        <div className="flex items-center justify-between border-b border-border/60 pb-2">
+          <dt className="text-muted-foreground">رقم الطلب</dt>
+          <dd className="font-mono text-foreground" dir="ltr">{order.orderNumber}</dd>
+        </div>
+
+        <div className="flex items-center gap-2 text-foreground">
+          <Clock className="size-3.5 shrink-0 text-primary" aria-hidden />
+          <dt className="sr-only">الخدمة</dt>
+          <dd className="font-semibold">{order.service?.name || "خدمة سيارات"}</dd>
+        </div>
+
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <User className="size-3.5 shrink-0" aria-hidden />
+          <dt className="sr-only">العميل</dt>
+          <dd>{order.user?.fullName || "عميل غير معروف"}</dd>
+        </div>
+
+        <div className="flex items-start gap-2 text-muted-foreground">
+          <MapPin className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <dt className="sr-only">الموقع</dt>
+          <dd className="truncate">{order.address || "موقع محدّد مسبقاً"}</dd>
+        </div>
+
+        {order.userNotes && (
+          <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-background/40 p-2.5 text-muted-foreground">
+            <FileText className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            <dt className="sr-only">ملاحظات العميل</dt>
+            <dd className="flex-1 leading-relaxed">{order.userNotes}</dd>
+          </div>
+        )}
+      </dl>
+
+      <div className="flex items-center justify-between rounded-xl border border-primary/20 bg-primary/5 p-3.5">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <DollarSign className="size-3.5" aria-hidden /> المبلغ الإجمالي
+        </span>
+        <Money value={amount} className="text-lg font-bold text-primary" />
+      </div>
+    </div>
+  );
+}
+
+function playOrderChime() {
+  try {
+    const soundEnabled = localStorage.getItem("provider_order_sound_enabled") !== "false";
+    const AudioContextClass = window.AudioContext ?? (window as AudioWindow).webkitAudioContext;
+    if (!soundEnabled || !AudioContextClass) return;
+
+    const audioCtx = new AudioContextClass();
+    playTone(audioCtx, 880, 0.45, 0);
+    playTone(audioCtx, 698.46, 0.6, 180);
+  } catch {
+    // Audio is best-effort and should never block order handling.
+  }
+}
+
+function playTone(audioCtx: AudioContext, freq: number, duration: number, delay: number) {
+  window.setTimeout(() => {
+    try {
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration - 0.02);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    } catch {
+      // Ignore browser-level audio interruptions.
+    }
+  }, delay);
+}
+
 export const useRealTimeNotification = () => {
   const ctx = useContext(RealTimeNotificationContext);
   if (!ctx) throw new Error("useRealTimeNotification must be used within RealTimeNotificationProvider");
   return ctx;
 };
+

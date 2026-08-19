@@ -1,42 +1,38 @@
 "use client";
 
+import { BadgeCheck, Clock } from "lucide-react";
+
 interface OverviewHeaderProps {
   businessName: string;
   ownerName: string;
   isApproved: boolean;
 }
 
+/**
+ * سطر ترحيب وحالة اعتماد — بلا `<h1>`.
+ * عنوان الصفحة يملكه الهيدر وحده الآن، فما بقي هنا هو ما لا يعرفه الهيدر:
+ * اسم النشاط وحالة اعتماده.
+ */
 export function OverviewHeader({ businessName, ownerName, isApproved }: OverviewHeaderProps) {
   return (
-    <div className="relative rounded-2xl overflow-hidden p-6 sm:p-8 hero-gradient-card border border-border/30 animate-fade-in">
-      <span className="absolute -top-12 -left-12 w-48 h-48 rounded-full bg-primary/10 blur-3xl pointer-events-none" aria-hidden />
-      <span className="absolute -bottom-8 -right-8 w-32 h-32 rounded-full bg-blue-500/8 blur-2xl pointer-events-none" aria-hidden />
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="min-w-0 truncate text-sm text-muted-foreground">
+        مرحباً،{" "}
+        <span className="font-semibold text-foreground">
+          {businessName || ownerName || "مزوّد الخدمة"}
+        </span>
+      </p>
 
-      <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-bold tracking-[0.2em] uppercase text-primary/70 mb-2 flex items-center gap-1.5">
-            <span className="inline-block w-4 h-px bg-primary/50 rounded" />
-            لوحة التحكم الرئيسية
-          </p>
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-gradient leading-tight">
-            مرحباً، {businessName || ownerName || "مزود الخدمة"} 👋
-          </h1>
-          <p className="text-muted-foreground font-medium mt-2 text-sm sm:text-base">
-            إليك نظرة عامة شاملة على أداء نشاطك التجاري — بيانات حية من قاعدة البيانات.
-          </p>
-        </div>
-        <div className={`self-start sm:self-center flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold ${
+      <span
+        className={`inline-flex shrink-0 items-center gap-2 self-start rounded-full border px-3 py-1.5 text-xs font-semibold sm:self-center ${
           isApproved
-            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-            : "bg-amber-500/10 border-amber-500/20 text-amber-400"
-        }`}>
-          <span className="relative flex h-2 w-2">
-            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isApproved ? "bg-emerald-400" : "bg-amber-400"}`} />
-            <span className={`relative inline-flex rounded-full h-2 w-2 ${isApproved ? "bg-emerald-400" : "bg-amber-400"}`} />
-          </span>
-          {isApproved ? "حساب معتمد ومفعل" : "طلب قيد الدراسة"}
-        </div>
-      </div>
+            ? "border-success/25 bg-success/10 text-success-soft"
+            : "border-warning/25 bg-warning/10 text-warning-soft"
+        }`}
+      >
+        {isApproved ? <BadgeCheck className="size-4" aria-hidden /> : <Clock className="size-4" aria-hidden />}
+        {isApproved ? "حساب معتمد ومفعّل" : "طلب قيد الدراسة"}
+      </span>
     </div>
   );
 }

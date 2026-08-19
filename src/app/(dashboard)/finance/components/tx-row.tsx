@@ -1,9 +1,9 @@
 "use client";
 
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { ar } from "date-fns/locale";
 import { Transaction } from "@/domain/entities/wallet.types";
+import { Badge } from "@/components/ui/badge";
+import { Money, RelativeTime } from "@/components/ui/money";
 import { cn } from "@/lib/utils";
 
 const KIND_LABELS: Record<string, string> = {
@@ -14,37 +14,57 @@ const KIND_LABELS: Record<string, string> = {
   topup: "إيداع رصيد",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  completed: "مكتمل",
-  pending: "قيد المراجعة",
-  failed: "مرفوض",
-  reversed: "معكوس",
+const STATUS_CONFIG: Record<string, { label: string; variant: "success" | "warning" | "danger" | "neutral" }> = {
+  completed: { label: "مكتمل", variant: "success" },
+  pending: { label: "قيد المراجعة", variant: "warning" },
+  failed: { label: "مرفوض", variant: "danger" },
+  reversed: { label: "معكوس", variant: "neutral" },
 };
 
-export function TxRow({ tx, currency }: { tx: Transaction; currency: string }) {
+export function TxRow({ tx, currency }: { tx: Transaction; currency?: string }) {
   const isCredit = tx.type === "credit";
+  const status = STATUS_CONFIG[tx.status] ?? { label: tx.status, variant: "neutral" as const };
+
   return (
-    <div className="grid gap-3 px-5 py-4 transition-colors hover:bg-secondary/25 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">
-      <div className="flex items-center gap-3 min-w-0">
-        <div className={cn("size-9 rounded-lg border flex items-center justify-center shrink-0", isCredit ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : "bg-rose-500/10 border-rose-500/20 text-rose-400")}>
-          {isCredit ? <ArrowDownRight className="size-4" /> : <ArrowUpRight className="size-4" />}
-        </div>
+    <div className="grid gap-3 px-5 py-4 transition-colors hover:bg-secondary/30 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center md:gap-6">
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          className={cn(
+            "flex size-10 shrink-0 items-center justify-center rounded-xl border",
+            isCredit
+              ? "border-success/20 bg-success/10 text-success-soft"
+              : "border-danger/20 bg-danger/10 text-danger-soft"
+          )}
+          aria-hidden
+        >
+          {isCredit ? <ArrowDownRight className="size-5" /> : <ArrowUpRight className="size-5" />}
+        </span>
         <div className="min-w-0">
-          <p className="text-sm font-bold text-foreground">{KIND_LABELS[tx.referenceType ?? ""] || (isCredit ? "إضافة رصيد" : "خصم رصيد")}</p>
-          <p className="truncate text-[11px] text-muted-foreground/70">{tx.description}</p>
-          <p className="mt-1 text-[10px] font-mono text-muted-foreground/50" dir="ltr">{tx.transactionNumber}</p>
+          <p className="text-sm font-semibold text-foreground">
+            {KIND_LABELS[tx.referenceType ?? ""] || (isCredit ? "إضافة رصيد" : "خصم رصيد")}
+          </p>
+          <p className="truncate text-xs text-muted-foreground">{tx.description}</p>
+          <p className="mt-0.5 font-mono text-[11px] text-muted-foreground" dir="ltr">
+            {tx.transactionNumber}
+          </p>
         </div>
       </div>
-      <p className="text-[11px] text-muted-foreground" suppressHydrationWarning>
-        {formatDistanceToNow(new Date(tx.createdAt), { addSuffix: true, locale: ar })}
-      </p>
-      <div className="text-left">
-        <p className={cn("font-black tabular-nums", isCredit ? "text-emerald-400" : "text-rose-400")}>
-          {isCredit ? "+" : "-"}{(tx.amount || 0).toLocaleString("ar-SY", { maximumFractionDigits: 2 })} {currency}
-        </p>
-        <span className={cn("inline-flex mt-1 rounded-full border px-2 py-0.5 text-[10px] font-bold", tx.status === "completed" ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" : tx.status === "pending" ? "bg-amber-500/10 border-amber-500/20 text-amber-300" : "bg-rose-500/10 border-rose-500/20 text-rose-400")}>
-          {STATUS_LABELS[tx.status] || tx.status}
-        </span>
+
+      <RelativeTime value={tx.createdAt} className="text-xs text-muted-foreground" />
+
+      <div className="flex items-center justify-between gap-3 md:flex-col md:items-end md:gap-1.5">
+        <Money
+          value={isCredit ? Math.abs(tx.amount ?? 0) : -Math.abs(tx.amount ?? 0)}
+          currency={currency}
+          signed
+          className={cn(
+            "text-base font-bold",
+            isCredit ? "text-success-soft" : "text-danger-soft"
+          )}
+        />
+        <Badge variant={status.variant} className="h-6 rounded-full border px-2.5">
+          {status.label}
+        </Badge>
       </div>
     </div>
   );

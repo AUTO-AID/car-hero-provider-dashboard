@@ -3,9 +3,14 @@ import type { NextRequest } from "next/server";
 
 const protectedRoutes = ["/"];
 const publicRoutes = ["/login"];
+const PUBLIC_FILE = /\.(?:ico|png|jpg|jpeg|svg|webp|gif|txt|xml|json|woff2?)$/i;
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (PUBLIC_FILE.test(pathname)) {
+    return NextResponse.next();
+  }
   
   const token = request.cookies.get("provider_access_token")?.value;
 

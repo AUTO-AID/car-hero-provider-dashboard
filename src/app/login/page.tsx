@@ -1,54 +1,50 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { toast } from "sonner";
-import {
-  Eye,
-  EyeOff,
-  Loader2,
-  Lock,
-  LogIn,
-  ShieldCheck,
-  User,
-} from "lucide-react";
+import { AlertCircle, Eye, EyeOff, Lock, LogIn, ShieldCheck, User } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/application/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
-  const { admin, isLoading, login } = useAuth();
+  const { provider, isLoading, login } = useAuth();
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  // الخطأ يبقى معروضاً داخل النموذج. الاعتماد على toast وحده كان يعني أن
+  // المستخدم الذي يعيد المحاولة بعد ثوانٍ لا يرى سبب الرفض إطلاقاً.
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isLoading && admin) {
-      window.location.href = "/";
+    if (!isLoading && provider) {
+      router.push("/");
     }
-  }, [admin, isLoading]);
+  }, [provider, isLoading, router]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     setLoading(true);
+    setFormError(null);
 
     try {
-      await login(email.trim(), password);
+      await login(phone.trim(), password);
       toast.success("تم تسجيل الدخول بنجاح");
-      window.location.href = "/";
+      router.push("/");
     } catch (error: unknown) {
-      const message = getLoginErrorMessage(error);
-      toast.error(message);
+      setFormError(getLoginErrorMessage(error));
       setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen gradient-bg-login flex items-center justify-center px-4 py-12">
+    <main className="min-h-screen gradient-bg-login flex items-center justify-center overflow-x-hidden px-4 py-10 sm:py-12">
       <div className="absolute inset-0 grid-pattern opacity-[0.035]" />
 
       {/* Decorative floating orbs */}
@@ -58,13 +54,17 @@ export default function LoginPage() {
         style={{ animationDelay: "1.5s" }}
       />
 
-      <section className="relative w-full max-w-[520px] animate-fade-in-up">
+      <section className="relative w-full max-w-[460px] min-w-0 animate-fade-in-up">
         {/* ── Logo & Brand ── */}
-        <div className="mb-10 text-center">
-          <img
+        <div className="mb-7 text-center">
+          <Image
             src="/logo_carHero.png"
             alt="Car Hero"
-            className="mx-auto mb-5 h-auto w-[250px] object-contain drop-shadow-[0_12px_32px_rgba(143,92,177,0.38)] transition-transform duration-300 hover:scale-[1.02]"
+            width={250}
+            height={100}
+            priority
+            style={{ width: "210px", height: "auto" }}
+            className="mx-auto mb-4 h-auto w-[210px] object-contain"
           />
           <p className="mt-2.5 text-sm text-muted-foreground">
             لوحة تحكم مزودي الخدمة
@@ -72,14 +72,14 @@ export default function LoginPage() {
         </div>
 
         {/* ── Login Card ── */}
-        <div className="glass-strong rounded-2xl p-10 sm:p-14 shadow-2xl shadow-black/25 border-glow-anim">
+        <div className="w-full max-w-full rounded-2xl border border-border bg-card/80 p-6 shadow-elev-3 backdrop-blur-xl sm:p-9">
           {/* Card Header */}
-          <div className="mb-10 flex items-center gap-4 border-b border-border/30 pb-8">
+          <div className="mb-7 flex flex-col items-center gap-4 border-b border-border/60 pb-6 text-center sm:flex-row sm:text-start">
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 shrink-0">
               <ShieldCheck className="h-6 w-6 text-primary" />
             </span>
-            <div>
-              <h2 className="text-xl font-bold text-white tracking-tight">
+            <div className="min-w-0">
+              <h2 className="text-xl font-bold text-white">
                 مرحباً بك في لوحة تحكم المزود
               </h2>
               <p className="text-muted-foreground font-medium text-sm mt-1.5">
@@ -91,92 +91,96 @@ export default function LoginPage() {
           {/* Form */}
           <form onSubmit={handleSubmit} className="flex flex-col">
             {/* Phone Field */}
-            <div className="space-y-3">
-              <Label
-                htmlFor="email"
-                className="text-sm font-semibold text-muted-foreground tracking-wide"
-              >
+            <div className="space-y-2">
+              <Label htmlFor="phone" className="text-sm font-semibold text-muted-foreground">
                 رقم الهاتف
               </Label>
-              <div className="relative group">
-                <User className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground/50 group-focus-within:text-primary transition-colors duration-200" />
+              <div className="group relative">
+                <User
+                  className="absolute start-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground/60 transition-colors group-focus-within:text-primary"
+                  aria-hidden
+                />
                 <Input
-                  id="email"
+                  id="phone"
+                  name="phone"
                   type="tel"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
                   placeholder="+963991234567"
                   dir="ltr"
-                  className="!h-[54px] rounded-xl border-border/50 bg-secondary/50 pr-12 text-base placeholder:text-muted-foreground/35 transition-all duration-200 focus:bg-secondary/70"
+                  aria-invalid={formError ? true : undefined}
+                  aria-describedby={formError ? "login-error" : undefined}
+                  className="h-12 rounded-xl ps-12 text-base"
                 />
               </div>
             </div>
 
             {/* Password Field */}
-            <div className="space-y-3 mt-8">
-              <Label
-                htmlFor="password"
-                className="text-sm font-semibold text-muted-foreground tracking-wide"
-              >
+            <div className="mt-5 space-y-2">
+              <Label htmlFor="password" className="text-sm font-semibold text-muted-foreground">
                 كلمة المرور
               </Label>
-              <div className="relative group">
-                <Lock className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground/50 group-focus-within:text-primary transition-colors duration-200" />
+              <div className="group relative">
+                <Lock
+                  className="absolute start-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground/60 transition-colors group-focus-within:text-primary"
+                  aria-hidden
+                />
                 <Input
                   id="password"
+                  name="password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   placeholder="••••••••"
                   autoComplete="current-password"
                   dir="ltr"
-                  className="!h-[54px] rounded-xl border-border/50 bg-secondary/50 px-12 text-base transition-all duration-200 focus:bg-secondary/70"
+                  aria-invalid={formError ? true : undefined}
+                  aria-describedby={formError ? "login-error" : undefined}
+                  className="h-12 rounded-xl px-12 text-base"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((value) => !value)}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 rounded-lg p-1 text-muted-foreground/50 transition-all duration-200 hover:text-foreground hover:bg-secondary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={
-                    showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"
-                  }
+                  className="absolute end-3 top-1/2 flex size-9 -translate-y-1/2 items-center justify-center rounded-lg text-muted-foreground/60 transition-colors hover:bg-secondary hover:text-foreground"
+                  aria-label={showPassword ? "إخفاء كلمة المرور" : "إظهار كلمة المرور"}
+                  aria-pressed={showPassword}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
+                  {showPassword ? <EyeOff className="size-5" aria-hidden /> : <Eye className="size-5" aria-hidden />}
                 </button>
               </div>
             </div>
 
-            {/* Divider */}
-            <div className="mt-16 mb-10">
-              <div className="h-px w-full bg-gradient-to-l from-transparent via-border/60 to-transparent" />
-            </div>
+            {formError && (
+              <p
+                id="login-error"
+                role="alert"
+                className="mt-4 flex items-start gap-2 rounded-lg border border-danger/25 bg-danger/10 p-3 text-sm text-danger-soft"
+              >
+                <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+                {formError}
+              </p>
+            )}
 
-            {/* Submit Button */}
             <Button
               type="submit"
-              disabled={loading}
-              className="!h-[58px] w-full rounded-xl text-base font-bold shadow-lg shadow-primary/25 transition-all duration-300 hover:shadow-xl hover:shadow-primary/30 hover:scale-[1.01] active:scale-[0.99] gap-3"
+              size="lg"
+              loading={loading}
+              className="mt-7 h-12 w-full rounded-xl text-base"
             >
-              {loading ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  جاري تسجيل الدخول...
-                </>
-              ) : (
-                <>
-                  <LogIn className="h-5 w-5" />
-                  تسجيل الدخول
-                </>
-              )}
+              {!loading && <LogIn className="size-5" aria-hidden />}
+              {loading ? "جارٍ تسجيل الدخول…" : "تسجيل الدخول"}
             </Button>
           </form>
         </div>
 
         {/* Footer */}
-        <p className="mt-8 text-center text-[11px] text-muted-foreground/40 tracking-wider">
+        <p
+          className="mt-8 text-center text-[11px] text-muted-foreground/40 tracking-wider"
+          dir="ltr"
+          suppressHydrationWarning
+        >
           CarHero Provider Dashboard &copy; {new Date().getFullYear()}
         </p>
       </section>

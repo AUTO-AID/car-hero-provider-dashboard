@@ -5,6 +5,7 @@ import { getProviderProfile } from "@/infrastructure/services/profile.service";
 import { getProviderDashboardAllStats } from "@/infrastructure/services/dashboard.service";
 import { getProviderBookings } from "@/infrastructure/services/bookings.service";
 import { providerQueryKeys } from "@/application/services/prefetch";
+import { RevenueStat, ServicePerformance } from "@/domain/entities/dashboard.types";
 import { OverviewHeader } from "./components/overview-header";
 import { OverviewStatsCards } from "./components/overview-stats-cards";
 import { OverviewRevenueChart } from "./components/overview-revenue-chart";
@@ -14,6 +15,7 @@ import { OverviewRecentBookings } from "./components/overview-recent-bookings";
 import { OverviewAlerts } from "./components/overview-alerts";
 import { Package, Wallet, Star, Zap } from "lucide-react";
 import { StatCard } from "@/components/ui/stat-card";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const AR_MONTHS = [
   "", "يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو",
@@ -25,7 +27,7 @@ export default function ProviderDashboardHome() {
     queryKey: providerQueryKeys.profile,
     queryFn: getProviderProfile,
   });
-  const provider = profileData?.data ?? profileData;
+  const provider = profileData;
   const activeServicesCount =
     provider?.services?.length ||
     provider?.services_list?.length ||
@@ -39,17 +41,17 @@ export default function ProviderDashboardHome() {
 
   const summary = dashboardStats?.summary ?? {};
   const orderCounts = dashboardStats?.ordersStats ?? {};
-  const rawRevenueList = (dashboardStats?.revenueStats ?? []) as any[];
-  const svcsPerformance = (dashboardStats?.servicesPerformance ?? []) as any[];
+  const rawRevenueList: RevenueStat[] = dashboardStats?.revenueStats ?? [];
+  const svcsPerformance: ServicePerformance[] = dashboardStats?.servicesPerformance ?? [];
 
   const { data: bookingsData } = useQuery({
-    queryKey: providerQueryKeys.bookings("current"),
+    queryKey: providerQueryKeys.bookings({ view: "current", page: 1, limit: 3 }),
     queryFn: () => getProviderBookings({ view: "current", page: 1, limit: 3 }),
   });
   const recentBookings = (bookingsData?.data ?? []).slice(0, 3);
 
   // Revenue chart data
-  const chartData = [...rawRevenueList].reverse().map((item: any) => {
+  const chartData = [...rawRevenueList].reverse().map((item) => {
     const monthNum = item._id?.month || 0;
     return {
       name: `${AR_MONTHS[monthNum] || monthNum} ${item._id?.year || ""}`,
@@ -71,19 +73,16 @@ export default function ProviderDashboardHome() {
 
   if (isProfileLoading || isStatsLoading) {
     return (
-      <div className="space-y-8 animate-pulse">
-        <div className="h-36 rounded-2xl bg-card/40 border border-border/20 p-6 flex flex-col justify-center gap-3">
-          <div className="h-3.5 w-32 bg-secondary/80 rounded-md" />
-          <div className="h-8 w-64 bg-secondary/80 rounded-md" />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {[Package, Wallet, Star, Zap].map((Icon, i) => (
-            <StatCard key={i} title="" value="" icon={Icon} loading={true} />
+      <div className="space-y-6">
+        <Skeleton className="h-12 w-72" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[Package, Wallet, Star, Zap].map((Icon, index) => (
+            <StatCard key={index} title="" value="" icon={Icon} loading />
           ))}
         </div>
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="xl:col-span-2 h-[380px] rounded-2xl bg-card/40 border border-border/20" />
-          <div className="h-[380px] rounded-2xl bg-card/40 border border-border/20" />
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+          <Skeleton className="h-[380px] rounded-xl xl:col-span-2" />
+          <Skeleton className="h-[380px] rounded-xl" />
         </div>
       </div>
     );
@@ -92,11 +91,18 @@ export default function ProviderDashboardHome() {
   const isApproved = provider?.isApproved && provider?.registrationStatus !== "pending";
 
   return (
-    <div className="space-y-8 animate-fade-in-up">
+    <div className="space-y-6 animate-fade-in-up">
       <OverviewHeader
-        businessName={provider?.businessName}
-        ownerName={provider?.ownerName}
-        isApproved={isApproved}
+        businessName={provider?.businessName ?? ""}
+        ownerName={provider?.ownerName ?? ""}
+        isApproved={Boolean(isApproved)}
+      />
+
+      {/* التنبيهات القابلة للتنفيذ تسبق الأرقام: أوّل سؤال للمزوّد كل صباح هو
+          "ما الذي يحتاج تدخّلي؟" لا "كم بلغ إجمالي أرباحي التاريخي؟" */}
+      <OverviewAlerts
+        isApproved={Boolean(isApproved)}
+        activeServicesCount={stats.activeServices}
       />
 
       <OverviewStatsCards
@@ -110,25 +116,20 @@ export default function ProviderDashboardHome() {
         ordersSparkline={ordersSparkline}
       />
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <OverviewRevenueChart data={chartData} />
-        <OverviewServicesRadar svcsPerformance={svcsPerformance} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <OverviewRecentBookings recentBookings={recentBookings} />
         <OverviewStatusDonut
           pendingCount={orderCounts.pending || 0}
           completedCount={orderCounts.completed || 0}
           inProgressCount={orderCounts.in_progress || 0}
           cancelledCount={orderCounts.cancelled || 0}
         />
-        <OverviewRecentBookings recentBookings={recentBookings} />
       </div>
 
-      <OverviewAlerts
-        isApproved={isApproved}
-        activeServicesCount={stats.activeServices}
-      />
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <OverviewRevenueChart data={chartData} />
+        <OverviewServicesRadar svcsPerformance={svcsPerformance} />
+      </div>
     </div>
   );
 }

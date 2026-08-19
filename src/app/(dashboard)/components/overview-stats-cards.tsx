@@ -2,6 +2,7 @@
 
 import { StatCard } from "@/components/ui/stat-card";
 import { Package, Wallet, Star, Zap } from "lucide-react";
+import { currencyLabel, formatAmount, formatNumber } from "@/lib/format";
 
 interface OverviewStatsCardsProps {
   totalBookings: number;
@@ -14,6 +15,13 @@ interface OverviewStatsCardsProps {
   ordersSparkline: number[];
 }
 
+function normalizeSparkline(data: number[]): number[] {
+  if (!data || data.length === 0) return [];
+  const max = Math.max(...data);
+  if (max === 0) return [];
+  return data.map((value) => value / max);
+}
+
 export function OverviewStatsCards({
   totalBookings,
   pendingBookings,
@@ -24,48 +32,49 @@ export function OverviewStatsCards({
   revenueSparkline,
   ordersSparkline,
 }: OverviewStatsCardsProps) {
-  const ratingSparkline = averageRating > 0 ? [averageRating] : [];
-  const servicesSparkline = activeServices > 0 ? [activeServices] : [];
-
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 stagger">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 stagger">
       <StatCard
         title="إجمالي الطلبات"
-        value={totalBookings.toLocaleString("ar-SA")}
+        value={totalBookings}
         icon={Package}
-        trend={{
-          value: pendingBookings,
-          label: "بانتظار الإجراء",
-          customValue: `${pendingBookings.toLocaleString()} طلب`,
-        }}
-        sparkline={ordersSparkline}
+        subtitle={
+          pendingBookings > 0
+            ? `${formatNumber(pendingBookings)} بانتظار إجراء منك`
+            : "لا شيء بانتظار إجراء"
+        }
+        tone={pendingBookings > 0 ? "warning" : "primary"}
+        sparkline={normalizeSparkline(ordersSparkline)}
       />
       <StatCard
         title="إجمالي الأرباح"
-        value={`${totalRevenue.toLocaleString("ar-SA")} ل.س`}
+        value={`${formatAmount(totalRevenue)} ${currencyLabel()}`}
         icon={Wallet}
-        iconBg="from-blue-500/20 to-blue-500/5"
-        iconColor="text-blue-400"
-        trend={{ value: revenueSparkline.length, label: "???? ?????? ???????", type: "up" }}
-        sparkline={revenueSparkline}
+        tone="info"
+        subtitle={
+          revenueSparkline.length
+            ? `على مدى ${formatNumber(revenueSparkline.length)} أشهر`
+            : "لا توجد أرباح مسجّلة بعد"
+        }
+        sparkline={normalizeSparkline(revenueSparkline)}
       />
       <StatCard
         title="التقييم العام"
-        value={averageRating ? averageRating.toFixed(1) : "0.0"}
+        value={averageRating ? averageRating.toFixed(1) : "—"}
         icon={Star}
-        iconBg="from-amber-500/20 to-amber-500/5"
-        iconColor="text-amber-400"
-        subtitle={`بناءً على ${totalReviews} تقييم`}
-        sparkline={ratingSparkline}
+        tone="warning"
+        subtitle={
+          totalReviews > 0
+            ? `بناءً على ${formatNumber(totalReviews)} تقييم`
+            : "لم يصلك تقييم بعد"
+        }
       />
       <StatCard
         title="الخدمات المتاحة"
         value={activeServices}
         icon={Zap}
-        iconBg="from-violet-500/20 to-violet-500/5"
-        iconColor="text-violet-400"
-        subtitle={activeServices === 0 ? "لم تُضف خدمات بعد" : `${activeServices} فئات مسجلة`}
-        sparkline={servicesSparkline}
+        tone="success"
+        subtitle={activeServices === 0 ? "لم تُضف خدمات بعد" : "فئة مسجّلة في ملفك"}
       />
     </div>
   );

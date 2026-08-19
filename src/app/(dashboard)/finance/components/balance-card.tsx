@@ -2,38 +2,53 @@
 
 import { LucideIcon, Wallet } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Money } from "@/components/ui/money";
 import { cn } from "@/lib/utils";
 
 interface BalanceCardProps {
   label: string;
   value: number;
-  currency: string;
+  currency?: string;
   icon?: LucideIcon;
-  accent?: "primary" | "success" | "warning" | "muted";
+  tone?: "primary" | "success" | "warning" | "muted";
 }
 
-const ACCENTS = {
-  primary: "border-primary/30 bg-primary/10 text-primary",
-  success: "border-emerald-500/25 bg-emerald-500/10 text-emerald-400",
-  warning: "border-amber-500/25 bg-amber-500/10 text-amber-300",
-  muted: "border-border/30 bg-card/60 text-foreground",
-};
+/**
+ * النغمة تلوّن الأيقونة والرقم فقط.
+ * الشكل السابق كان يضيف على كل بطاقة توهّجاً ملوّناً (`drop-shadow` بلون
+ * الحالة) + ظلاً خارجياً + تدرّجاً على الـ hover، فصار المبلغ نفسه أقل وضوحاً
+ * من الهالة المحيطة به.
+ */
+const TONES = {
+  primary: { icon: "border-primary/20 bg-primary/10 text-primary", value: "text-foreground" },
+  success: { icon: "border-success/20 bg-success/10 text-success-soft", value: "text-success-soft" },
+  warning: { icon: "border-warning/20 bg-warning/10 text-warning-soft", value: "text-warning-soft" },
+  muted: { icon: "border-border bg-secondary/60 text-muted-foreground", value: "text-foreground" },
+} as const;
 
-export function BalanceCard({ label, value, currency, icon: Icon = Wallet, accent = "muted" }: BalanceCardProps) {
+export function BalanceCard({ label, value, currency, icon: Icon = Wallet, tone = "muted" }: BalanceCardProps) {
+  const styles = TONES[tone];
+
   return (
-    <Card className={cn("rounded-xl border", ACCENTS[accent])}>
+    <Card className="gap-0 transition-colors hover:border-border">
       <CardContent className="p-5">
         <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-bold text-muted-foreground">{label}</p>
-            <p className="mt-2 text-2xl font-black tabular-nums text-white">
-              {(value || 0).toLocaleString("ar-SY", { maximumFractionDigits: 2 })}
-              <span className="mr-1 text-[11px] font-bold text-muted-foreground">{currency}</span>
-            </p>
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            <Money
+              value={value}
+              currency={currency}
+              className={cn("mt-2 block text-2xl font-bold", styles.value)}
+            />
           </div>
-          <div className={cn("size-10 rounded-lg border flex items-center justify-center", ACCENTS[accent])}>
-            <Icon className="size-5" />
-          </div>
+          <span
+            className={cn(
+              "flex size-11 shrink-0 items-center justify-center rounded-xl border",
+              styles.icon
+            )}
+          >
+            <Icon className="size-5" aria-hidden />
+          </span>
         </div>
       </CardContent>
     </Card>

@@ -17,14 +17,15 @@ const KIND_LABELS: Record<string, string> = {
 
 const COLORS = ["#10b981", "#f59e0b", "#6366f1", "#f43f5e", "#94a3b8"];
 
-export function FinanceCharts({ summary, currency }: { summary: ProviderFinancialSummary; currency: string }) {
+export function FinanceCharts({ summary, currency }: { summary: ProviderFinancialSummary; currency?: string }) {
   const trend = summary.revenueTrend;
   const breakdown = summary.breakdown;
 
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-      <Card className="lg:col-span-2 p-5 bg-card/60 border-border/40 rounded-xl">
-        <div className="mb-4">
+      <Card className="lg:col-span-2 p-6 bg-card/40 backdrop-blur-2xl border border-border/20 shadow-2xl shadow-black/20 group relative overflow-hidden rounded-[1.5rem]">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+        <div className="mb-4 relative z-10">
           <h3 className="flex items-center gap-2 text-sm font-bold text-white"><TrendingUp className="size-4 text-primary" /> أرباح آخر 30 يوماً</h3>
           <p className="mt-1 text-[11px] text-muted-foreground">صافي أرباح الطلبات المكتملة المثبتة في سجل المعاملات</p>
         </div>
@@ -46,8 +47,9 @@ export function FinanceCharts({ summary, currency }: { summary: ProviderFinancia
         <p className="text-[10px] text-muted-foreground">القيم معروضة بعملة {currency}</p>
       </Card>
 
-      <Card className="p-5 bg-card/60 border-border/40 rounded-xl">
-        <div className="mb-4">
+      <Card className="p-6 bg-card/40 backdrop-blur-2xl border border-border/20 shadow-2xl shadow-black/20 group relative overflow-hidden rounded-[1.5rem]">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+        <div className="mb-4 relative z-10">
           <h3 className="flex items-center gap-2 text-sm font-bold text-white"><BarChart2 className="size-4 text-amber-400" /> توزيع العمليات</h3>
           <p className="mt-1 text-[11px] text-muted-foreground">جميع الحركات المالية المسجلة للمحفظة</p>
         </div>

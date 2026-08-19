@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useClientReady } from "@/application/hooks/use-client-ready";
 import { Card } from "@/components/ui/card";
 import { Zap } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -18,10 +18,7 @@ interface OverviewServicesRadarProps {
 }
 
 export function OverviewServicesRadar({ svcsPerformance }: OverviewServicesRadarProps) {
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  const isMounted = useClientReady();
 
   const topSvcs = svcsPerformance.slice(0, 6);
   const maxCount = Math.max(...topSvcs.map((item) => item.count), 1);
@@ -77,12 +74,12 @@ export function OverviewServicesRadar({ svcsPerformance }: OverviewServicesRadar
   };
 
   return (
-    <Card className="p-6 bg-card/60 backdrop-blur-xl border-border/40 shadow-xl shadow-black/20 relative overflow-hidden group">
-      <div className="absolute inset-0 bg-gradient-to-br from-white/[0.02] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+    <Card className="p-6 bg-card/40 backdrop-blur-2xl border-border/20 shadow-2xl shadow-black/20 relative overflow-hidden group">
+      <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
 
       <div className="mb-4 relative z-10">
-        <h3 className="font-bold text-white text-base tracking-tight flex items-center gap-2">
-          <Zap className="w-4 h-4 text-violet-400" />
+        <h3 className="font-bold text-white text-base flex items-center gap-2 drop-shadow-sm">
+          <Zap className="w-5 h-5 text-violet-400 drop-shadow-sm" />
           أداء الخدمات
         </h3>
         <p className="text-[12px] text-muted-foreground mt-1">مقارنة الخدمات الأكثر طلباً من بيانات الطلبات المكتملة</p>

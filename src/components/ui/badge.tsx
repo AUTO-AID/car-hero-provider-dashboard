@@ -19,6 +19,14 @@ const badgeVariants = cva(
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
+        // ── متغيّرات دلالية ──
+        // تستبدل الفئات الميتة .badge-success/.badge-warning/… في globals.css
+        // (كانت معرّفة ولم تُستخدم قط) وسلاسل tailwind الخام المكرّرة في الشاشات.
+        success: "border-success/25 bg-success/12 text-success-soft",
+        warning: "border-warning/25 bg-warning/12 text-warning-soft",
+        danger: "border-danger/25 bg-danger/12 text-danger-soft",
+        info: "border-info/25 bg-info/12 text-info-soft",
+        neutral: "border-border bg-secondary/60 text-muted-foreground",
       },
     },
     defaultVariants: {

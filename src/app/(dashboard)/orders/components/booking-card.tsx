@@ -1,11 +1,11 @@
 "use client";
 
-import { formatDistanceToNow } from "date-fns";
-import { ar } from "date-fns/locale";
-import { CalendarClock, CarFront, Check, CheckCircle2, Clock, Eye, Loader2, MapPin, Play, User, X } from "lucide-react";
+import { CalendarClock, CarFront, Check, CheckCircle2, Clock, Eye, MapPin, Play, User, X } from "lucide-react";
 import { Booking } from "@/domain/entities/booking.types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Money, RelativeTime } from "@/components/ui/money";
+import { formatDateTime } from "@/lib/format";
 import { StatusBadge } from "./status-badge";
 
 interface BookingCardProps {
@@ -16,6 +16,15 @@ interface BookingCardProps {
   onCancel: () => void;
   onViewDetails: () => void;
   pendingAction?: string;
+}
+
+/** الإجراء الأساسي الوحيد المتاح في الحالة الراهنة للطلب. */
+function primaryAction(status: string) {
+  if (status === "pending") return { key: "accept", label: "قبول الطلب", icon: CheckCircle2 } as const;
+  if (["accepted", "provider_assigned", "provider_en_route", "provider_arrived"].includes(status))
+    return { key: "start", label: "بدء التنفيذ", icon: Play } as const;
+  if (status === "in_progress") return { key: "complete", label: "إنهاء الطلب", icon: Check } as const;
+  return null;
 }
 
 export function BookingCard({
@@ -31,62 +40,69 @@ export function BookingCard({
   const isPending = Boolean(pendingAction);
   const canCancel = ["pending", "accepted"].includes(booking.status);
 
+  // إجراء أساسي واحد بارز. كانت البطاقة تعرض ثلاثة أزرار متدرّجة الألوان
+  // (أزرق/بنفسجي/أخضر) بالوزن البصري نفسه، فلا شيء يدلّ على الخطوة التالية.
+  const action = primaryAction(booking.status);
+  const runAction = action?.key === "accept" ? onAccept : action?.key === "start" ? onStart : onComplete;
+
   return (
-    <Card className="glass-v2 border border-border/30 rounded-xl overflow-hidden hover:border-primary/20 transition-all duration-200 hover:shadow-lg hover:shadow-primary/5">
-      <CardContent className="p-5 space-y-4">
+    <Card className="gap-0 transition-colors hover:border-primary/40">
+      <CardContent className="space-y-4 p-5">
         <div className="flex items-center justify-between gap-2">
           <StatusBadge status={booking.status} />
-          <span className="text-sm font-black text-foreground tabular-nums">
-            {(booking.payableAmount ?? 0).toLocaleString("ar-SY")} ل.س
-          </span>
+          <Money value={booking.payableAmount} className="text-sm font-bold" />
         </div>
 
         <div>
-          <h3 className="font-bold text-base text-white leading-snug">
+          <h3 className="text-base leading-snug font-bold text-foreground">
             {booking.service?.name || "خدمة سيارات"}
           </h3>
-          <p className="mt-1 text-[10px] font-mono text-muted-foreground/60" dir="ltr">
+          <p className="mt-1 font-mono text-[11px] text-muted-foreground" dir="ltr">
             {booking.orderNumber || booking._id}
           </p>
         </div>
 
-        <div className="space-y-2.5">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground/75">
-            <User className="w-3.5 h-3.5 shrink-0 text-primary/50" />
-            <span>{booking.user?.fullName || "عميل غير معروف"}</span>
+        <dl className="space-y-2.5 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <User className="size-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
+            <dt className="sr-only">العميل</dt>
+            <dd>{booking.user?.fullName || "عميل غير معروف"}</dd>
           </div>
 
           {booking.isScheduled && booking.scheduledAt && (
-            <div className="flex items-center gap-2 text-xs text-amber-300/90">
-              <CalendarClock className="w-3.5 h-3.5 shrink-0" />
-              <span>{new Date(booking.scheduledAt).toLocaleString("ar-SY")}</span>
+            <div className="flex items-center gap-2 text-warning-soft">
+              <CalendarClock className="size-3.5 shrink-0" aria-hidden />
+              <dt className="sr-only">الموعد</dt>
+              <dd>{formatDateTime(booking.scheduledAt)}</dd>
             </div>
           )}
 
           {booking.vehicle && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground/75 bg-secondary/20 p-2.5 rounded-lg border border-border/20">
-              <CarFront className="w-4 h-4 shrink-0 text-primary/60" />
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-foreground truncate">
+            <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-secondary/30 p-2.5">
+              <CarFront className="size-4 shrink-0 text-muted-foreground/70" aria-hidden />
+              <div className="min-w-0 flex-1">
+                <dt className="sr-only">المركبة</dt>
+                <dd className="truncate font-semibold text-foreground">
                   {[booking.vehicle.brand, booking.vehicle.model].filter(Boolean).join(" ") || "مركبة العميل"}
-                </p>
+                </dd>
                 {booking.vehicle.plateNumber && (
-                  <span className="text-[10px] text-muted-foreground/60">{booking.vehicle.plateNumber}</span>
+                  <span className="text-[11px] text-muted-foreground">{booking.vehicle.plateNumber}</span>
                 )}
               </div>
             </div>
           )}
 
-          <div className="flex items-start gap-2 text-xs text-muted-foreground/75">
-            <MapPin className="w-3.5 h-3.5 shrink-0 text-primary/50 mt-0.5" />
+          <div className="flex items-start gap-2">
+            <MapPin className="mt-0.5 size-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
             <div className="min-w-0">
-              <p className="truncate">{booking.address || "موقع محدد مسبقاً"}</p>
+              <dt className="sr-only">الموقع</dt>
+              <dd className="truncate">{booking.address || "موقع محدّد مسبقاً"}</dd>
               {typeof lat === "number" && typeof lng === "number" && (
                 <a
                   href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex text-[10px] text-primary hover:underline mt-1 font-semibold"
+                  className="mt-1 inline-flex text-[11px] font-semibold text-primary hover:underline"
                 >
                   عرض الموقع على الخريطة
                 </a>
@@ -94,34 +110,48 @@ export function BookingCard({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-muted-foreground/75">
-            <Clock className="w-3.5 h-3.5 shrink-0 text-primary/50" />
-            <span suppressHydrationWarning>{formatDistanceToNow(new Date(booking.createdAt), { addSuffix: true, locale: ar })}</span>
+          <div className="flex items-center gap-2">
+            <Clock className="size-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
+            <dt className="sr-only">وقت الإنشاء</dt>
+            <dd><RelativeTime value={booking.createdAt} /></dd>
           </div>
-        </div>
+        </dl>
 
-        <div className="pt-3 flex flex-wrap gap-2 border-t border-border/20">
-          <Button type="button" variant="outline" size="sm" onClick={onViewDetails} className="flex-1">
-            <Eye /> التفاصيل
+        <div className="flex items-center gap-2 border-t border-border/60 pt-3">
+          {action && (
+            <Button
+              type="button"
+              onClick={runAction}
+              loading={pendingAction === action.key}
+              disabled={isPending}
+              className="flex-1"
+            >
+              {pendingAction !== action.key && <action.icon aria-hidden />} {action.label}
+            </Button>
+          )}
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onViewDetails}
+            className={action ? undefined : "flex-1"}
+          >
+            <Eye aria-hidden /> التفاصيل
           </Button>
-          {booking.status === "pending" && (
-            <Button type="button" size="sm" onClick={onAccept} disabled={isPending} className="flex-1 bg-blue-600 hover:bg-blue-500">
-              {pendingAction === "accept" ? <Loader2 className="animate-spin" /> : <CheckCircle2 />} قبول
-            </Button>
-          )}
-          {["accepted", "provider_assigned", "provider_en_route", "provider_arrived"].includes(booking.status) && (
-            <Button type="button" size="sm" onClick={onStart} disabled={isPending} className="flex-1 bg-violet-600 hover:bg-violet-500">
-              {pendingAction === "start" ? <Loader2 className="animate-spin" /> : <Play />} بدء التنفيذ
-            </Button>
-          )}
-          {booking.status === "in_progress" && (
-            <Button type="button" size="sm" onClick={onComplete} disabled={isPending} className="flex-1 bg-emerald-600 hover:bg-emerald-500">
-              {pendingAction === "complete" ? <Loader2 className="animate-spin" /> : <Check />} إكمال
-            </Button>
-          )}
+
           {canCancel && (
-            <Button type="button" variant="destructive" size="sm" onClick={onCancel} disabled={isPending} aria-label="إلغاء الطلب">
-              {pendingAction === "cancel" ? <Loader2 className="animate-spin" /> : <X />}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onCancel}
+              loading={pendingAction === "cancel"}
+              disabled={isPending}
+              aria-label="إلغاء الطلب"
+              title="إلغاء الطلب"
+              className="text-muted-foreground hover:bg-danger/10 hover:text-danger-soft"
+            >
+              {pendingAction !== "cancel" && <X aria-hidden />}
             </Button>
           )}
         </div>

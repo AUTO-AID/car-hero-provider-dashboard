@@ -1,21 +1,32 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { IBM_Plex_Sans_Arabic, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+/* الخط الأساسي للواجهة العربية — أوزان 400..700 (لا يوجد 900 في هذه العائلة،
+   لذلك يُربط font-black بـ 700 في globals.css تفادياً للتغميق الصناعي
+   الذي يشوّه اتصال الحروف العربية) */
+const sansArabic = IBM_Plex_Sans_Arabic({
+  variable: "--font-sans-arabic",
+  subsets: ["arabic", "latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+/* خط أحادي المسافة للمعرّفات اللاتينية: أرقام الطلبات والمعاملات و IBAN */
+const mono = IBM_Plex_Mono({
+  variable: "--font-mono-latin",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "CarHero Provider Dashboard",
-  description: "CarHero provider service dashboard",
+  title: {
+    default: "لوحة مزوّد الخدمة | كار هيرو",
+    template: "%s | كار هيرو",
+  },
+  description: "لوحة تحكّم مزوّدي الخدمة في كار هيرو — الطلبات والخدمات والأرباح.",
 };
 
 export default function RootLayout({
@@ -25,9 +36,10 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="ar"
+      dir="rtl"
       data-scroll-behavior="smooth"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`dark ${sansArabic.variable} ${mono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         <Providers>{children}</Providers>

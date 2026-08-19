@@ -84,11 +84,11 @@ export function WeeklyPerformanceChart({ data }: WeeklyPerformanceChartProps) {
   };
 
   return (
-    <Card className="p-6 bg-card/60 backdrop-blur-xl border-border/40 group relative overflow-hidden">
+    <Card className="p-6 bg-card/40 backdrop-blur-2xl border border-border/20 shadow-2xl shadow-black/20 group relative overflow-hidden rounded-[1.5rem]">
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
       <div className="mb-4 relative z-10">
-        <h3 className="font-bold text-white text-sm tracking-tight">نظرة عامة على الأداء الأسبوعي</h3>
-        <p className="text-[10px] text-muted-foreground/60 mt-0.5">الطلبات المكتملة وإيرادات آخر سبعة أيام من بياناتك الفعلية</p>
+        <h3 className="font-bold text-white text-base drop-shadow-sm">نظرة عامة على الأداء الأسبوعي</h3>
+        <p className="text-[12px] text-muted-foreground/80 mt-0.5">الطلبات المكتملة وإيرادات آخر سبعة أيام من بياناتك الفعلية</p>
       </div>
       <div className="h-56 relative z-10">
         {data.length > 0 ? (

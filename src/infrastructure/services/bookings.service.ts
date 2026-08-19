@@ -1,5 +1,7 @@
 import { Booking, BookingFacets, BookingPagination } from "@/domain/entities/booking.types";
+import { normalizeBooking, BookingDto } from "@/infrastructure/adapters/booking.adapter";
 import { api } from "../api/client";
+import { isRecord } from "../api/types";
 import { unwrapApiData } from "../api/unwrap";
 
 export type BookingView = "current" | "history" | "appointments" | "all";
@@ -29,32 +31,6 @@ const CURRENT_STATUSES = [
 
 const HISTORY_STATUSES = ["completed", "cancelled", "rejected"];
 
-// Orders arrive from a compatibility API that serves both historical and current shapes.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function normalizeBooking(order: any): Booking {
-  const amount =
-    order.payableAmount ??
-    order.total ??
-    order.totalAmount ??
-    order.servicePrice ??
-    0;
-
-  return {
-    ...order,
-    _id: order._id ?? order.id,
-    payableAmount: amount,
-    total: amount,
-    location: order.location ?? order.userLocation,
-    service: order.service ?? {
-      name: order.serviceName ?? order.serviceId ?? "خدمة غير معروفة",
-    },
-    user: order.user ?? {
-      fullName: order.userName ?? order.userId ?? "عميل غير معروف",
-    },
-    vehicle: order.vehicle,
-  };
-}
-
 function statusesForView(view: BookingView, status?: string) {
   if (status && status !== "all") return status;
   if (view === "current") return CURRENT_STATUSES.join(",");
@@ -76,14 +52,14 @@ export async function getProviderBookings(filters: BookingFilters = {}): Promise
       status: status && status !== "all" ? status : undefined,
     },
   });
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const payload = unwrapApiData<any>(response.data);
-  const orders = payload?.orders ?? (Array.isArray(payload) ? payload : []);
+
+  const payload = unwrapApiData<unknown>(response.data);
+  const orders = getOrdersFromPayload(payload);
 
   return {
     data: orders.map(normalizeBooking),
-    pagination: payload?.pagination as BookingPagination | undefined,
-    facets: payload?.facets as BookingFacets | undefined,
+    pagination: getPayloadValue<BookingPagination>(payload, "pagination"),
+    facets: getPayloadValue<BookingFacets>(payload, "facets"),
   };
 }
 
@@ -120,10 +96,21 @@ export async function getProviderWeeklyActivity() {
 }
 
 export const getBookingDetails = (bookingId: string) =>
-  api.get(`/orders/${bookingId}`).then((response) => normalizeBooking(unwrapApiData(response.data)));
+  api.get(`/orders/${bookingId}`).then((response) => normalizeBooking(unwrapApiData<BookingDto>(response.data)));
 
 export const updateBookingStatus = (bookingId: string, status: string) =>
   api.patch(`/orders/${bookingId}/status`, { status }).then((response) => unwrapApiData(response.data));
 
 export const cancelBooking = (bookingId: string, reason: string) =>
   api.post(`/orders/${bookingId}/cancel`, { reason, cancelledBy: "provider" }).then((response) => unwrapApiData(response.data));
+
+function getOrdersFromPayload(payload: unknown): BookingDto[] {
+  if (Array.isArray(payload)) return payload.filter(isRecord);
+  if (isRecord(payload) && Array.isArray(payload.orders)) return payload.orders.filter(isRecord);
+  return [];
+}
+
+function getPayloadValue<T>(payload: unknown, key: string): T | undefined {
+  return isRecord(payload) && key in payload ? (payload[key] as T) : undefined;
+}
+

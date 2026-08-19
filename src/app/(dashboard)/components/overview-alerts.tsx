@@ -1,67 +1,73 @@
 "use client";
 
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { AlertTriangle, CheckCircle2, Clock, Zap, TrendingUp, ArrowUpRight } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, Clock, Zap } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface OverviewAlertsProps {
   isApproved: boolean;
   activeServicesCount: number;
 }
 
+/**
+ * تنبيهات قابلة للتنفيذ فقط.
+ *
+ * كانت البطاقة تعرض دائماً ثلاثة صناديق ملوّنة، اثنان منها نصّ تسويقي ثابت
+ * ("الحساب معتمد"، "يمكنك متابعة الإيرادات من قسم الأرباح") لا يتغيّر أبداً
+ * ولا يطلب شيئاً — فتعلّم المزوّد تجاهل المنطقة كلّها، بما فيها التنبيه الحقيقي.
+ */
 export function OverviewAlerts({ isApproved, activeServicesCount }: OverviewAlertsProps) {
+  const alerts = [
+    !isApproved && {
+      key: "approval",
+      icon: Clock,
+      tone: "border-warning/25 bg-warning/5 text-warning-soft",
+      title: "الحساب قيد المراجعة",
+      body: "وثائقك قيد التدقيق من إدارة كار هيرو. سيصلك إشعار فور التفعيل.",
+      href: "/settings",
+      cta: "مراجعة الوثائق",
+    },
+    activeServicesCount === 0 && {
+      key: "services",
+      icon: Zap,
+      tone: "border-primary/25 bg-primary/5 text-primary",
+      title: "لم تُسجّل أي خدمة بعد",
+      body: "لن يظهر نشاطك للعملاء قبل إضافة خدمة واحدة على الأقل وتحديد سعرها.",
+      href: "/services",
+      cta: "إضافة خدمة",
+    },
+  ].filter(Boolean) as Array<{
+    key: string;
+    icon: typeof Clock;
+    tone: string;
+    title: string;
+    body: string;
+    href: string;
+    cta: string;
+  }>;
+
+  if (alerts.length === 0) return null;
+
   return (
-    <Card className="glass-v2 border border-border/30 rounded-2xl overflow-hidden animate-fade-in">
-      <CardHeader className="pb-3 border-b border-border/20">
-        <CardTitle className="text-base font-bold flex items-center gap-2">
-          <span className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center">
-            <AlertTriangle className="w-3.5 h-3.5 text-primary" />
-          </span>
-          تنبيهات النظام
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {isApproved ? (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-emerald-500/8 border border-emerald-500/20">
-            <div className="w-8 h-8 rounded-lg bg-emerald-500/15 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+    <Card className="gap-0">
+      <CardContent className="grid gap-3 p-5 sm:grid-cols-2">
+        {alerts.map((alert) => (
+          <Link
+            key={alert.key}
+            href={alert.href}
+            className={`group flex items-start gap-3 rounded-xl border p-4 transition-colors hover:bg-secondary/40 ${alert.tone}`}
+          >
+            <alert.icon className="mt-0.5 size-5 shrink-0" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold">{alert.title}</p>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{alert.body}</p>
+              <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold">
+                {alert.cta}
+                <ArrowLeft className="size-3.5 transition-transform group-hover:-translate-x-0.5" aria-hidden />
+              </span>
             </div>
-            <div>
-              <p className="text-sm font-bold text-emerald-400">الحساب معتمد ومفعل</p>
-              <p className="text-[12px] text-emerald-400/70 mt-0.5">ملفك التجاري مفعل ويظهر للعملاء في تطبيق الهواتف والموقع.</p>
-            </div>
-          </div>
-        ) : (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/8 border border-amber-500/20">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center shrink-0">
-              <Clock className="w-4 h-4 text-amber-400" />
-            </div>
-            <div>
-              <p className="text-sm font-bold text-amber-400">الحساب قيد المراجعة الفنية</p>
-              <p className="text-[12px] text-amber-400/70 mt-0.5">الوثائق قيد التدقيق من قِبل إدارة CarHero. سيُرسَل إشعار عند التفعيل.</p>
-            </div>
-          </div>
-        )}
-        {activeServicesCount === 0 && (
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-violet-500/8 border border-violet-500/20">
-            <div className="w-8 h-8 rounded-lg bg-violet-500/15 flex items-center justify-center shrink-0">
-              <Zap className="w-4 h-4 text-violet-400" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-bold text-violet-400">قم بإعداد خدماتك</p>
-              <p className="text-[12px] text-violet-400/70 mt-0.5">لم تسجل خدمات نشطة بعد. يرجى التوجه لصفحة الخدمات لإضافتها.</p>
-            </div>
-            <ArrowUpRight className="w-4 h-4 text-violet-400/60 shrink-0 mt-1" />
-          </div>
-        )}
-        <div className="flex items-start gap-3 p-4 rounded-xl bg-sky-500/8 border border-sky-500/20">
-          <div className="w-8 h-8 rounded-lg bg-sky-500/15 flex items-center justify-center shrink-0">
-            <TrendingUp className="w-4 h-4 text-sky-400" />
-          </div>
-          <div>
-            <p className="text-sm font-bold text-sky-400">تتبع أداءك</p>
-            <p className="text-[12px] text-sky-400/70 mt-0.5">يمكنك متابعة الإيرادات والطلبات تفصيلياً من قسم الأرباح والمحفظة.</p>
-          </div>
-        </div>
+          </Link>
+        ))}
       </CardContent>
     </Card>
   );

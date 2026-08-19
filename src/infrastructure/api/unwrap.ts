@@ -1,9 +1,10 @@
-export function unwrapApiData<T = any>(payload: any): T {
+import { isRecord } from "./types";
+
+export function unwrapApiData<T = unknown>(payload: unknown): T {
   let current = payload;
 
   while (
-    current &&
-    typeof current === "object" &&
+    isRecord(current) &&
     "data" in current &&
     ("success" in current || "timestamp" in current)
   ) {

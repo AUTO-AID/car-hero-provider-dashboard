@@ -29,14 +29,16 @@ export function useSocket() {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
-        setSocket(null);
-        setIsConnected(false);
+        queueMicrotask(() => {
+          setSocket(null);
+          setIsConnected(false);
+        });
       }
       return;
     }
 
     const socketUrl = getSocketUrl();
-    console.log(`[Socket] Connecting to ${socketUrl}...`);
+    debugSocket(`[Socket] Connecting to ${socketUrl}...`);
 
     const client = io(socketUrl, {
       auth: {
@@ -48,35 +50,48 @@ export function useSocket() {
     });
 
     socketRef.current = client;
-    setSocket(client);
+    queueMicrotask(() => setSocket(client));
 
     client.on("connect", () => {
-      console.log(`[Socket] Connected successfully: ${client.id}`);
+      debugSocket(`[Socket] Connected successfully: ${client.id}`);
       setIsConnected(true);
 
-      // Join the notifications room for this provider
-      client.emit("join_notifications", {}, (response: any) => {
-        console.log("[Socket] Joined notifications channel:", response);
+      client.emit("join_notifications", {}, (response: JoinNotificationsResponse) => {
+        debugSocket("[Socket] Joined notifications channel:", response);
       });
     });
 
     client.on("disconnect", (reason) => {
-      console.log(`[Socket] Disconnected: ${reason}`);
+      debugSocket(`[Socket] Disconnected: ${reason}`);
       setIsConnected(false);
     });
 
     client.on("connect_error", (error) => {
-      console.error("[Socket] Connection error:", error);
+      debugSocket("[Socket] Connection error:", error);
     });
 
     return () => {
-      console.log("[Socket] Cleaning up connection...");
+      debugSocket("[Socket] Cleaning up connection...");
       client.disconnect();
       socketRef.current = null;
-      setSocket(null);
-      setIsConnected(false);
+      queueMicrotask(() => {
+        setSocket(null);
+        setIsConnected(false);
+      });
     };
   }, [token, provider?.id]);
 
   return { socket, isConnected };
+}
+
+interface JoinNotificationsResponse {
+  success?: boolean;
+  room?: string;
+}
+
+function debugSocket(message: string, payload?: unknown) {
+  if (process.env.NODE_ENV === "development") {
+    if (payload === undefined) console.info(message);
+    else console.info(message, payload);
+  }
 }

@@ -1,15 +1,25 @@
 import { api } from "../api/client";
 import { unwrapApiData } from "../api/unwrap";
-import { WorkingHourItem } from "@/domain/entities/provider.types";
+import { AccountProfile, ProviderProfile, WorkingHourItem, ServiceCatalogItem } from "@/domain/entities/provider.types";
 
 export const getProviderProfile = () =>
-  api.get("/providers/me").then((res) => unwrapApiData(res.data));
+  api.get("/providers/me").then((res) => unwrapApiData<ProviderProfile>(res.data));
 
 export const updateProviderProfile = <T extends object>(data: T) =>
-  api.put("/providers/me", data).then((res) => unwrapApiData(res.data));
+  api.put("/providers/me", data).then((res) => unwrapApiData<ProviderProfile>(res.data));
 
 export const updateProviderDocuments = (docs: string[]) =>
-  api.put("/providers/me/documents", { documents: docs }).then((res) => unwrapApiData(res.data));
+  api.put("/providers/me/documents", { documents: docs }).then((res) => unwrapApiData<ProviderProfile>(res.data));
+
+/**
+ * حالة التوفّر التي يراها العملاء.
+ * `GET /providers/nearby` لا يُرجع إلا المزوّدين بحالة `online`، أي أن هذه
+ * القيمة تحدّد ظهور النشاط في التطبيق — ولم يكن في اللوحة أي وسيلة لتغييرها.
+ */
+export type ProviderAvailability = "online" | "busy" | "offline";
+
+export const updateProviderStatus = (status: ProviderAvailability) =>
+  api.put("/providers/me/status", { status }).then((res) => unwrapApiData<ProviderProfile>(res.data));
 
 export interface NotificationPreferences {
   push: boolean;
@@ -17,22 +27,12 @@ export interface NotificationPreferences {
   email: boolean;
 }
 
-export interface ServiceCatalogItem {
-  id: string;
-  name: string;
-  nameAr: string;
-  category: string;
-  basePrice: number;
-  discountedPrice: number;
-  estimatedDuration: number;
-  isEmergency: boolean;
-}
 
 export const getAccountProfile = () =>
-  api.get("/users/me").then((res) => unwrapApiData(res.data));
+  api.get("/users/me").then((res) => unwrapApiData<AccountProfile>(res.data));
 
 export const updateAccountPreferences = (preferences: { language: string; notifications: NotificationPreferences }) =>
-  api.patch("/users/me", { preferences }).then((res) => unwrapApiData(res.data));
+  api.patch("/users/me", { preferences }).then((res) => unwrapApiData<AccountProfile>(res.data));
 
 export const uploadProviderDocument = (file: File, onProgress: (percent: number) => void) => {
   const body = new FormData();
@@ -52,7 +52,7 @@ export const updateProviderServices = (payload: {
   services: string[];
   servicePrices: Record<string, number>;
   serviceAvailability: Record<string, boolean>;
-}) => api.put("/providers/me/services", payload).then((res) => unwrapApiData(res.data));
+}) => api.put("/providers/me/services", payload).then((res) => unwrapApiData<ProviderProfile>(res.data));
 
 export const updateProviderWorkingHours = (workingHours: WorkingHourItem[]) =>
-  api.put("/providers/me/working-hours", { workingHours }).then((res) => unwrapApiData(res.data));
+  api.put("/providers/me/working-hours", { workingHours }).then((res) => unwrapApiData<ProviderProfile>(res.data));

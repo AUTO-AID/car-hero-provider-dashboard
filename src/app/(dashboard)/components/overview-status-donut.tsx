@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useClientReady } from "@/application/hooks/use-client-ready";
 import { Card } from "@/components/ui/card";
 import { Package } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -28,17 +28,14 @@ export function OverviewStatusDonut({
   inProgressCount,
   cancelledCount,
 }: OverviewStatusDonutProps) {
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  const isMounted = useClientReady();
 
   const statusDonutOption = {
     backgroundColor: "transparent",
     tooltip: {
       ...TOOLTIP_STYLE,
       trigger: "item",
-      formatter: (p: any) => `<div style="display:flex;align-items:center;gap:8px">
+      formatter: (p: TooltipParam) => `<div style="display:flex;align-items:center;gap:8px">
         <span style="width:8px;height:8px;border-radius:50%;background:${p.color};box-shadow:0 0 8px ${p.color}55"></span>
         <span style="color:#cbd5e1">${p.name}</span>
         <b style="color:#fff;margin-right:6px">${p.value.toLocaleString("ar-EG")}</b>
@@ -85,10 +82,11 @@ export function OverviewStatusDonut({
   };
 
   return (
-    <Card className="p-6 bg-card/60 backdrop-blur-xl border-border/40 shadow-xl shadow-black/20 relative overflow-hidden group">
+    <Card className="p-6 bg-card/40 backdrop-blur-2xl border-border/20 shadow-2xl shadow-black/20 relative overflow-hidden group">
+      <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
       <div className="mb-4 relative z-10">
-        <h3 className="font-bold text-white text-base tracking-tight flex items-center gap-2">
-          <Package className="w-4 h-4 text-violet-400" />
+        <h3 className="font-bold text-foreground text-base flex items-center gap-2 drop-shadow-sm">
+          <Package className="w-5 h-5 text-violet-400 drop-shadow-sm" />
           توزيع حالات الطلبات
         </h3>
         <p className="text-[12px] text-muted-foreground mt-1">نسب الطلبات حسب الحالة</p>
@@ -123,10 +121,17 @@ export function OverviewStatusDonut({
               style={{ background: item.color, boxShadow: `0 0 6px ${item.color}60` }}
             />
             <span className="text-[10px] text-muted-foreground/80 flex-1">{item.label}</span>
-            <span className="text-[11px] font-bold text-white tabular-nums">{item.val}</span>
+            <span className="text-[11px] font-bold text-foreground tabular-nums">{item.val}</span>
           </div>
         ))}
       </div>
     </Card>
   );
+}
+
+interface TooltipParam {
+  color: string;
+  name: string;
+  value: number;
+  percent: number;
 }

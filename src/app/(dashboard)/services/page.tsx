@@ -2,20 +2,32 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, Loader2, RefreshCw, Search, Wrench } from "lucide-react";
+import { AlertCircle, CheckCircle2, Package, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { providerQueryKeys } from "@/application/services/prefetch";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { getProviderProfile, getServiceCatalog, ServiceCatalogItem, updateProviderServices } from "@/infrastructure/services/profile.service";
+import { Card } from "@/components/ui/card";
+import { DataToolbar, type ActiveFilterChip } from "@/components/ui/data-toolbar";
+import { Select, optionsFromMap } from "@/components/ui/select";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
+import { getProviderProfile, getServiceCatalog, updateProviderServices } from "@/infrastructure/services/profile.service";
+import { ServiceCatalogItem } from "@/domain/entities/provider.types";
 import { ServiceCard } from "./components/service-card";
+import { StatCard } from "@/components/ui/stat-card";
 
 type Filter = "all" | "mine" | "enabled" | "disabled";
 const categoryLabels: Record<string, string> = {
   all: "كل الفئات", roadside_assistance: "مساعدة طريق", towing: "السحب", battery: "البطارية",
   tire: "الإطارات", fuel: "الوقود", lockout: "الأقفال", maintenance: "الصيانة", car_wash: "الغسيل", other: "أخرى",
 };
+const FILTER_LABELS: Record<Filter, string> = {
+  all: "كل الكتالوج",
+  mine: "خدماتي فقط",
+  enabled: "المتاحة للحجز",
+  disabled: "المتوقّفة",
+};
+const CATEGORY_OPTIONS = optionsFromMap(categoryLabels);
+const FILTER_OPTIONS = optionsFromMap(FILTER_LABELS);
 
 export default function ProviderServicesPage() {
   const profileQuery = useQuery({ queryKey: providerQueryKeys.profile, queryFn: getProviderProfile });
@@ -56,29 +68,62 @@ function ServicesManager({ profile, catalog }: { profile: { services?: string[];
   const save = (nextServices: string[], nextPrices = prices, nextAvailability = availability) => mutation.mutate({ services: nextServices, servicePrices: pick(nextPrices, nextServices), serviceAvailability: pickAvailability(nextAvailability, nextServices) });
   const activeCount = services.filter((id) => availability[id] !== false).length;
 
+  const catalogSize = dedupeCatalog(catalog, selected).length;
+  const chips: ActiveFilterChip[] = [
+    search && { key: "search", label: `بحث: ${search}`, onRemove: () => setSearch("") },
+    category !== "all" && { key: "category", label: `الفئة: ${categoryLabels[category]}`, onRemove: () => setCategory("all") },
+    filter !== "all" && { key: "filter", label: FILTER_LABELS[filter], onRemove: () => setFilter("all") },
+  ].filter(Boolean) as ActiveFilterChip[];
+
   return (
-    <div className="space-y-6 animate-fade-in max-w-5xl">
-      <div className="flex items-center gap-4"><span className="w-11 h-11 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center"><Wrench className="w-5 h-5 text-primary" /></span><div><h1 className="text-2xl font-black tracking-tight">خدماتي والأسعار</h1><p className="text-sm text-muted-foreground mt-0.5">إدارة الخدمات التي تظهر للعملاء وأسعارها الخاصة بنشاطك</p></div></div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Metric label="خدماتي" value={services.length} />
-        <Metric label="متاحة للحجز" value={activeCount} />
-        <Metric label="متوقفة مؤقتاً" value={services.length - activeCount} />
-        <Metric label="كتالوج المنصة" value={dedupeCatalog(catalog, selected).length} />
+    <div className="space-y-6 animate-fade-in-up">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard title="خدماتي" value={services.length} icon={Wrench} tone="info" />
+        <StatCard title="متاحة للحجز" value={activeCount} icon={CheckCircle2} tone="success" />
+        <StatCard title="متوقّفة مؤقتاً" value={services.length - activeCount} icon={AlertCircle} tone="danger" />
+        <StatCard title="كتالوج المنصّة" value={catalogSize} icon={Package} />
       </div>
-      <Card className="glass-v2 border-border/30 rounded-lg overflow-hidden">
-        <CardContent className="p-5 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-3">
-            <label className="relative"><Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" /><Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="ابحث باسم الخدمة..." className="pr-9" /></label>
-            <select value={category} onChange={(event) => setCategory(event.target.value)} className="h-9 rounded-lg border border-border/40 bg-background px-3 text-xs outline-none">
-              {Object.entries(categoryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {([["all", "كل الكتالوج"], ["mine", "خدماتي"], ["enabled", "المتاحة"], ["disabled", "المتوقفة"]] as Array<[Filter, string]>).map(([value, label]) => <button type="button" key={value} onClick={() => setFilter(value)} className={`h-8 px-3 rounded-md text-xs font-bold border transition-colors ${filter === value ? "bg-primary text-primary-foreground border-primary" : "border-border/30 text-muted-foreground hover:text-foreground"}`}>{label}</button>)}
-          </div>
-          {visibleCatalog.length ? <div className="grid grid-cols-1 md:grid-cols-2 gap-3">{visibleCatalog.map((service) => <ServiceCard key={service.id} service={service} selected={selected.has(service.id)} enabled={availability[service.id] !== false} price={prices[service.id] ?? (service.discountedPrice || service.basePrice)} pending={mutation.isPending} onAdd={() => save([...services, service.id], { ...prices, [service.id]: service.discountedPrice || service.basePrice }, { ...availability, [service.id]: true })} onDelete={() => save(services.filter((id) => id !== service.id))} onToggle={(enabled) => save(services, prices, { ...availability, [service.id]: enabled })} onPrice={(price) => save(services, { ...prices, [service.id]: price })} />)}</div> : <Empty /> }
-        </CardContent>
-      </Card>
+
+      <DataToolbar
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="ابحث باسم الخدمة…"
+        searchLabel="بحث في الخدمات"
+        chips={chips}
+        onReset={() => { setSearch(""); setCategory("all"); setFilter("all"); }}
+        resultCount={visibleCatalog.length}
+      >
+        <Select aria-label="فئة الخدمة" value={category} onValueChange={setCategory} options={CATEGORY_OPTIONS} />
+        <Select aria-label="تصفية حسب الحالة" value={filter} onValueChange={(value) => setFilter(value as Filter)} options={FILTER_OPTIONS} />
+      </DataToolbar>
+
+      {visibleCatalog.length ? (
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+          {visibleCatalog.map((service) => (
+            <ServiceCard
+              key={service.id}
+              service={service}
+              selected={selected.has(service.id)}
+              enabled={availability[service.id] !== false}
+              price={prices[service.id] ?? (service.discountedPrice || service.basePrice)}
+              pending={mutation.isPending}
+              onAdd={() => save([...services, service.id], { ...prices, [service.id]: service.discountedPrice || service.basePrice }, { ...availability, [service.id]: true })}
+              onDelete={() => save(services.filter((id) => id !== service.id))}
+              onToggle={(enabled) => save(services, prices, { ...availability, [service.id]: enabled })}
+              onPrice={(price) => save(services, { ...prices, [service.id]: price })}
+            />
+          ))}
+        </div>
+      ) : (
+        <Card className="border-dashed">
+          <EmptyState
+            icon={Wrench}
+            title="لا توجد خدمات مطابقة"
+            description="جرّب تغيير الفئة أو مسح البحث لعرض كتالوج المنصّة كاملاً."
+            action={chips.length ? <Button type="button" variant="outline" size="sm" onClick={() => { setSearch(""); setCategory("all"); setFilter("all"); }}>مسح الفلاتر</Button> : undefined}
+          />
+        </Card>
+      )}
     </div>
   );
 }
@@ -90,7 +135,6 @@ function dedupeCatalog(catalog: ServiceCatalogItem[], selected: Set<string>) {
 }
 function pick(prices: Record<string, number>, ids: string[]) { return Object.fromEntries(ids.filter((id) => prices[id] !== undefined).map((id) => [id, prices[id]])); }
 function pickAvailability(values: Record<string, boolean>, ids: string[]) { return Object.fromEntries(ids.map((id) => [id, values[id] ?? true])); }
-function Metric({ label, value }: { label: string; value: number }) { return <div className="p-3 rounded-lg border border-border/25 bg-secondary/10"><p className="text-[11px] text-muted-foreground">{label}</p><p className="text-xl font-black mt-1">{value}</p></div>; }
-function Empty() { return <div className="py-12 text-center text-xs text-muted-foreground"><Wrench className="w-7 h-7 mx-auto mb-2 opacity-40" />لا توجد خدمات تطابق البحث أو الفلاتر.</div>; }
-function Loading() { return <div className="min-h-[55vh] flex items-center justify-center gap-3 text-sm text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin text-primary" /> جاري تحميل الخدمات...</div>; }
-function LoadError({ retry }: { retry: () => void }) { return <div className="min-h-[55vh] flex flex-col items-center justify-center gap-3 text-center"><AlertCircle className="w-7 h-7 text-rose-400" /><p className="text-sm font-bold">تعذر تحميل الخدمات</p><Button onClick={retry} className="gap-2"><RefreshCw className="w-4 h-4" /> إعادة المحاولة</Button></div>; }
+
+function Loading() { return <LoadingState label="جارٍ تحميل الخدمات…" />; }
+function LoadError({ retry }: { retry: () => void }) { return <ErrorState title="تعذّر تحميل الخدمات" description="لم يستجب الخادم لطلب كتالوج الخدمات أو ملفّك." onRetry={retry} />; }

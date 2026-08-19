@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useClientReady } from "@/application/hooks/use-client-ready";
 import { Card } from "@/components/ui/card";
 import { TrendingUp, Activity } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -8,11 +8,12 @@ import dynamic from "next/dynamic";
 const ReactECharts = dynamic(() => import("echarts-for-react"), { ssr: false });
 
 const TOOLTIP_STYLE = {
-  backgroundColor: "rgba(13, 9, 22, 0.97)",
-  borderColor: "rgba(143,92,177,0.35)",
+  backgroundColor: "rgba(13, 9, 22, 0.7)",
+  borderColor: "rgba(143,92,177,0.3)",
   borderWidth: 1,
-  padding: [12, 16],
-  textStyle: { color: "#cbd5e1", fontSize: 12, fontFamily: "IBM Plex Sans Arabic" },
+  padding: [16, 20],
+  textStyle: { color: "#e2e8f0", fontSize: 13, fontFamily: "IBM Plex Sans Arabic" },
+  extraCssText: "backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);",
 };
 
 interface ChartItem {
@@ -26,10 +27,7 @@ interface OverviewRevenueChartProps {
 }
 
 export function OverviewRevenueChart({ data }: OverviewRevenueChartProps) {
-  const [isMounted, setIsMounted] = useState(false);
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  const isMounted = useClientReady();
 
   const revenueChartOption = {
     backgroundColor: "transparent",
@@ -41,22 +39,22 @@ export function OverviewRevenueChart({ data }: OverviewRevenueChartProps) {
         crossStyle: { color: "rgba(255,255,255,0.1)" },
         lineStyle: { color: "rgba(143,92,177,0.3)" },
       },
-      formatter: (params: any[]) => {
+      formatter: (params: TooltipParam[]) => {
         const rev = params[0];
         const ord = params[1];
-        return `<div style="min-width:160px">
-          <div style="font-weight:700;color:#f5f5f7;border-bottom:1px solid rgba(255,255,255,0.08);padding-bottom:8px;margin-bottom:8px;font-size:13px">${rev?.axisValue}</div>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:6px">
-            <span style="display:flex;align-items:center;gap:6px;color:#94a3b8">
-              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a57ed8;box-shadow:0 0 6px #a57ed8"></span>الأرباح
+        return `<div style="min-width:180px">
+          <div style="font-weight:800;color:#f8fafc;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:10px;margin-bottom:12px;font-size:14px;letter-spacing:0.5px">${rev?.axisValue}</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:8px">
+            <span style="display:flex;align-items:center;gap:8px;color:#94a3b8;font-weight:600">
+              <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:linear-gradient(135deg, #a57ed8, #8f5cb1);box-shadow:0 0 8px #a57ed8"></span>الأرباح
             </span>
-            <b style="color:#c9a7e3;font-variant-numeric:tabular-nums">${(rev?.value || 0).toLocaleString("ar-EG")} ل.س</b>
+            <b style="color:#e9d5ff;font-variant-numeric:tabular-nums;font-size:15px;text-shadow:0 0 10px rgba(165,126,216,0.3)">${(rev?.value || 0).toLocaleString("ar-EG")} ل.س</b>
           </div>
-          ${ord ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:20px">
-            <span style="display:flex;align-items:center;gap:6px;color:#94a3b8">
-              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 6px #34d399"></span>الطلبات
+          ${ord ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:24px">
+            <span style="display:flex;align-items:center;gap:8px;color:#94a3b8;font-weight:600">
+              <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:linear-gradient(135deg, #34d399, #10b981);box-shadow:0 0 8px #34d399"></span>الطلبات
             </span>
-            <b style="color:#6ee7b7;font-variant-numeric:tabular-nums">${(ord?.value || 0).toLocaleString("ar-EG")} طلب</b>
+            <b style="color:#a7f3d0;font-variant-numeric:tabular-nums;font-size:15px;text-shadow:0 0 10px rgba(52,211,153,0.3)">${(ord?.value || 0).toLocaleString("ar-EG")} طلب</b>
           </div>` : ""}
         </div>`;
       },
@@ -161,12 +159,12 @@ export function OverviewRevenueChart({ data }: OverviewRevenueChartProps) {
   };
 
   return (
-    <Card className="xl:col-span-2 p-6 bg-card/60 backdrop-blur-xl border-border/40 shadow-xl shadow-black/20 group relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+    <Card className="xl:col-span-2 p-6 bg-card/40 backdrop-blur-2xl border border-border/20 shadow-2xl group relative overflow-hidden transition-all duration-300">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4 relative z-10">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4 relative z-10">
         <div>
-          <h3 className="font-bold text-white text-base tracking-tight flex items-center gap-2">
+          <h3 className="font-bold text-white text-base flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-violet-400" />
             نمو الأرباح والطلبات
           </h3>
@@ -195,10 +193,15 @@ export function OverviewRevenueChart({ data }: OverviewRevenueChartProps) {
           />
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-            <Activity className="w-5 h-5 mr-2 animate-spin" /> جاري تحميل الرسم البياني...
+            <Activity className="w-5 h-5 me-2 animate-spin" /> جاري تحميل الرسم البياني...
           </div>
         )}
       </div>
     </Card>
   );
+}
+
+interface TooltipParam {
+  axisValue?: string;
+  value?: number;
 }

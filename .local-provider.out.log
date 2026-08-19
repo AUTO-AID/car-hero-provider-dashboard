@@ -1,0 +1,12 @@
+
+> car-hero-provider-dashboard@0.1.0 dev
+> next dev --webpack -p 3002
+
+▲ Next.js 16.2.6 (webpack)
+- Local:         http://localhost:3002
+- Network:       http://10.2.0.2:3002
+- Environments: .env.local
+✓ Ready in 1398ms
+
+○ Compiling /login ...
+ GET /login 200 in 20.8s (next.js: 20.4s, proxy.ts: 16ms, application-code: 421ms)
