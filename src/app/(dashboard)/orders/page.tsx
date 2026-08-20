@@ -31,6 +31,7 @@ import { EmptyState, ErrorState } from "@/components/ui/states";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime, formatWeekdayShort } from "@/lib/format";
 import { BookingCard } from "./components/booking-card";
+import { LocationBroadcastCard } from "./components/location-broadcast-card";
 import { StatusBadge, STATUS_MAP } from "./components/status-badge";
 import { TabButton } from "./components/tab-button";
 import { WeeklyPerformanceChart } from "./components/weekly-performance-chart";
@@ -245,6 +246,9 @@ export default function ProviderOrdersPage() {
         <StatCard title="المواعيد المجدولة" value={facets?.totals.scheduled ?? 0} icon={CalendarClock} tone="info" />
         <StatCard title="الملغاة والمرفوضة" value={cancelledCount} icon={XCircle} tone="danger" />
       </div>
+
+      {/* بثّ الموقع: يظهر فقط حين توجد طلبات نشطة تستقبله */}
+      <LocationBroadcastCard bookings={bookings} />
 
       <div role="tablist" aria-label="عروض الطلبات" className="flex gap-6 border-b border-border/60 overflow-x-auto">
         {TABS.map((tab) => (
