@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Bell, CheckCircle2, LogOut, Smartphone, Volume2 } from "lucide-react";
+import { Bell, CheckCircle2, LogOut, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/application/contexts/auth-context";
 import { providerQueryKeys } from "@/application/services/prefetch";
@@ -16,7 +16,6 @@ export function SecurityPreferences({ phone, isVerified, initialPreferences }: {
   const { logout } = useAuth();
   const queryClient = useQueryClient();
   const [preferences, setPreferences] = useState(initialPreferences);
-  const [soundEnabled, setSoundEnabled] = useState(() => typeof window === "undefined" || localStorage.getItem("provider_order_sound_enabled") !== "false");
   const mutation = useMutation({
     mutationFn: (next: NotificationPreferences) => updateAccountPreferences({ language: "ar", notifications: next }),
     onSuccess: async (_result, next) => {
@@ -27,24 +26,18 @@ export function SecurityPreferences({ phone, isVerified, initialPreferences }: {
     onError: () => toast.error("تعذر حفظ تفضيلات التنبيه."),
   });
   const change = (key: keyof NotificationPreferences, enabled: boolean) => mutation.mutate({ ...preferences, [key]: enabled });
-  const changeSound = (enabled: boolean) => {
-    setSoundEnabled(enabled);
-    localStorage.setItem("provider_order_sound_enabled", String(enabled));
-    toast.success("تم حفظ إعداد الصوت لهذا الجهاز.");
-  };
 
   return (
     <div className="space-y-5">
       <Card className="gap-0">
         <CardHeader className="border-b pb-4">
           <CardTitle className="flex items-center gap-2 text-base"><Bell className="size-4 text-primary" aria-hidden /> تفضيلات التنبيهات</CardTitle>
-          <CardDescription>تحفظ قنوات التواصل في حسابك، ويمكن تعطيل تنبيهات الشاشة الفورية.</CardDescription>
+          <CardDescription>تحفظ قنوات التواصل في حسابك. عروض الطلبات الجديدة تصل إلى تطبيق الفني حصراً ولا تظهر هنا.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3 p-5 sm:p-6">
-          <Preference title="تنبيهات الشاشة الفورية" description="استقبال إشعارات الطلبات والتحديثات عبر لوحة المزود." checked={preferences.push} disabled={mutation.isPending} onChange={(checked) => change("push", checked)} />
+          <Preference title="تنبيهات الشاشة الفورية" description="استقبال تحديثات الطلبات الجارية في هذه اللوحة. أما عروض الطلبات الجديدة فتصل إلى تطبيق الفني وحده." checked={preferences.push} disabled={mutation.isPending} onChange={(checked) => change("push", checked)} />
           <Preference title="رسائل الهاتف" description="تفضيل محفوظ لاستخدامه عند تفعيل قناة الرسائل في النظام." checked={preferences.sms} disabled={mutation.isPending} onChange={(checked) => change("sms", checked)} />
           <Preference title="رسائل البريد الإلكتروني" description="تفضيل محفوظ للتقارير والإشعارات البريدية عند تفعيل القناة." checked={preferences.email} disabled={mutation.isPending} onChange={(checked) => change("email", checked)} />
-          <Preference title="صوت الطلبات الجديدة على هذا الجهاز" description="يتحكم بصوت التنبيه المحلي داخل هذا المتصفح فقط." checked={soundEnabled} disabled={false} onChange={changeSound} icon={Volume2} />
         </CardContent>
       </Card>
 
@@ -71,7 +64,8 @@ export function SecurityPreferences({ phone, isVerified, initialPreferences }: {
   );
 }
 
-function Preference({ title, description, checked, disabled, onChange, icon: Icon = Bell }: { title: string; description: string; checked: boolean; disabled: boolean; onChange: (checked: boolean) => void; icon?: typeof Bell }) {
+function Preference({ title, description, checked, disabled, onChange }: { title: string; description: string; checked: boolean; disabled: boolean; onChange: (checked: boolean) => void }) {
+  const Icon = Bell;
   return (
     /* التسمية هي منطقة النقر — لا onClick على div خارجي كان يلتقط النقرات
        دون أن يعلن لقارئ الشاشة أنه عنصر تفاعلي */
