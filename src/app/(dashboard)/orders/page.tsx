@@ -314,7 +314,6 @@ export default function ProviderOrdersPage() {
                 key={booking._id}
                 booking={booking}
                 onViewDetails={() => setSelectedBookingId(booking._id)}
-                onAccept={() => runStatusAction(booking, "accept", "accepted")}
                 onStart={() => runStatusAction(booking, "start", "in_progress")}
                 onComplete={() => runStatusAction(booking, "complete", "completed")}
                 onCancel={() => setCancelTarget(booking)}

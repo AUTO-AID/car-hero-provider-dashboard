@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock, CarFront, Check, CheckCircle2, Clock, Eye, MapPin, Play, User, X } from "lucide-react";
+import { CalendarClock, CarFront, Check, Clock, Eye, MapPin, Play, Smartphone, User, X } from "lucide-react";
 import { Booking } from "@/domain/entities/booking.types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,7 +10,6 @@ import { StatusBadge } from "./status-badge";
 
 interface BookingCardProps {
   booking: Booking;
-  onAccept: () => void;
   onStart: () => void;
   onComplete: () => void;
   onCancel: () => void;
@@ -18,9 +17,15 @@ interface BookingCardProps {
   pendingAction?: string;
 }
 
-/** الإجراء الأساسي الوحيد المتاح في الحالة الراهنة للطلب. */
+/**
+ * الإجراء الأساسي الوحيد المتاح في الحالة الراهنة للطلب.
+ *
+ * لا إجراء على `pending`: الطلب في هذه الحالة **عرضٌ بمهلة** مفتوح على تطبيق
+ * الفنّي، والردّ عليه هناك حصراً. القبول من هنا كان يمرّ بمسار تغيير الحالة
+ * العام فيتجاوز دفاتر العروض — يبقى العرض مفتوحاً ولا يُسجَّل عدّاد القبول —
+ * ويسمح بأخذ طلب من أمام حاسوب لا يمكن الوصول منه إلى موقع العطل.
+ */
 function primaryAction(status: string) {
-  if (status === "pending") return { key: "accept", label: "قبول الطلب", icon: CheckCircle2 } as const;
   if (["accepted", "provider_assigned", "provider_en_route", "provider_arrived"].includes(status))
     return { key: "start", label: "بدء التنفيذ", icon: Play } as const;
   if (status === "in_progress") return { key: "complete", label: "إنهاء الطلب", icon: Check } as const;
@@ -29,7 +34,6 @@ function primaryAction(status: string) {
 
 export function BookingCard({
   booking,
-  onAccept,
   onStart,
   onComplete,
   onCancel,
@@ -38,12 +42,17 @@ export function BookingCard({
 }: BookingCardProps) {
   const [lng, lat] = booking.location?.coordinates || [];
   const isPending = Boolean(pendingAction);
-  const canCancel = ["pending", "accepted"].includes(booking.status);
+  const awaitingOfferReply = booking.status === "pending";
+
+  // الإلغاء أيضاً يخرج من `pending` للسبب نفسه: هذه الحالة عرضٌ لم يُقبل بعد،
+  // وإلغاؤه من اللوحة **يقتل طلب العميل** بدل أن يمرّره إلى الفنّي التالي —
+  // وهو أسوأ من القبول الخاطئ. الاعتذار عن العرض في التطبيق يفعل الصواب.
+  const canCancel = booking.status === "accepted";
 
   // إجراء أساسي واحد بارز. كانت البطاقة تعرض ثلاثة أزرار متدرّجة الألوان
   // (أزرق/بنفسجي/أخضر) بالوزن البصري نفسه، فلا شيء يدلّ على الخطوة التالية.
   const action = primaryAction(booking.status);
-  const runAction = action?.key === "accept" ? onAccept : action?.key === "start" ? onStart : onComplete;
+  const runAction = action?.key === "start" ? onStart : onComplete;
 
   return (
     <Card className="gap-0 transition-colors hover:border-primary/40">
@@ -116,6 +125,17 @@ export function BookingCard({
             <dd><RelativeTime value={booking.createdAt} /></dd>
           </div>
         </dl>
+
+        {awaitingOfferReply && (
+          <p
+            className="flex items-center gap-2 rounded-lg border border-border/60 bg-secondary/30 p-2.5 text-[11px] leading-relaxed text-muted-foreground"
+            role="note"
+          >
+            <Smartphone className="size-3.5 shrink-0 text-primary" aria-hidden />
+            هذا الطلب معروض الآن على تطبيق الفني بمهلة قصيرة. القبول أو الاعتذار
+            من التطبيق وحده.
+          </p>
+        )}
 
         <div className="flex items-center gap-2 border-t border-border/60 pt-3">
           {action && (
