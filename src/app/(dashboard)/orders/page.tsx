@@ -50,11 +50,22 @@ const PAYMENT_STATUS_LABELS: Record<string, string> = {
   refunded: "مسترد",
 };
 
+/** الطرق الفعّالة — وهي وحدها ما يظهر في الفلتر */
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "نقدي",
-  wallet: "المحفظة",
-  card: "بطاقة",
-  points: "نقاط",
+  points: "نقاط الولاء",
+  cham_cash: "شام كاش",
+};
+
+/**
+ * تسميات القراءة تشمل المتقاعد أيضاً: طلبات قديمة تحمل `wallet` و`card`،
+ * وعرضها بقيمتها الخام في جدول عربي يبدو كعطل.
+ */
+const PAYMENT_METHOD_READ_LABELS: Record<string, string> = {
+  ...PAYMENT_METHOD_LABELS,
+  wallet: "المحفظة (متقاعد)",
+  card: "بطاقة (متقاعد)",
+  online: "دفع إلكتروني (متقاعد)",
 };
 
 const SORT_LABELS: Record<string, string> = {
@@ -229,7 +240,7 @@ export default function ProviderOrdersPage() {
     search && { key: "search", label: `بحث: ${search}`, onRemove: () => { setSearch(""); setPage(1); } },
     status !== "all" && { key: "status", label: `الحالة: ${STATUS_MAP[status]?.label ?? status}`, onRemove: () => { setStatus("all"); setPage(1); } },
     paymentStatus !== "all" && { key: "paymentStatus", label: `الدفع: ${PAYMENT_STATUS_LABELS[paymentStatus]}`, onRemove: () => { setPaymentStatus("all"); setPage(1); } },
-    paymentMethod !== "all" && { key: "paymentMethod", label: `الوسيلة: ${PAYMENT_METHOD_LABELS[paymentMethod]}`, onRemove: () => { setPaymentMethod("all"); setPage(1); } },
+    paymentMethod !== "all" && { key: "paymentMethod", label: `الوسيلة: ${PAYMENT_METHOD_READ_LABELS[paymentMethod] ?? paymentMethod}`, onRemove: () => { setPaymentMethod("all"); setPage(1); } },
     dateFrom && { key: "dateFrom", label: `من: ${dateFrom}`, onRemove: () => { setDateFrom(""); setPage(1); } },
     dateTo && { key: "dateTo", label: `إلى: ${dateTo}`, onRemove: () => { setDateTo(""); setPage(1); } },
     sortBy !== "createdAt" && { key: "sortBy", label: `الفرز: ${SORT_LABELS[sortBy]}`, onRemove: () => { setSortBy("createdAt"); setPage(1); } },
