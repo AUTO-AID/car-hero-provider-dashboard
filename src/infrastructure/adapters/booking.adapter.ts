@@ -5,9 +5,12 @@ export type BookingDto = UnknownRecord;
 
 export function normalizeBooking(order: BookingDto): Booking {
   const amount =
+    // الترتيب مقصود ومطابق لبقيّة الواجهات: المستحقّ ثم الإجمالي ثم القديم.
+    // كان `total` قبل `totalAmount` هنا وحده، فطلبٌ يحمل الحقلين بقيمتين
+    // مختلفتين كان يظهر برقم يخالف ما يراه العميل والإدارة.
     getNumber(order.payableAmount) ??
-    getNumber(order.total) ??
     getNumber(order.totalAmount) ??
+    getNumber(order.total) ??
     getNumber(order.servicePrice) ??
     0;
 
