@@ -31,7 +31,7 @@ const FILTER_OPTIONS = optionsFromMap(FILTER_LABELS);
 
 export default function ProviderServicesPage() {
   const profileQuery = useQuery({ queryKey: providerQueryKeys.profile, queryFn: getProviderProfile });
-  const catalogQuery = useQuery({ queryKey: ["service-catalog"], queryFn: getServiceCatalog });
+  const catalogQuery = useQuery({ queryKey: providerQueryKeys.serviceCatalog, queryFn: getServiceCatalog });
   if (profileQuery.isLoading || catalogQuery.isLoading) return <Loading />;
   if (profileQuery.isError || catalogQuery.isError) return <LoadError retry={() => { void profileQuery.refetch(); void catalogQuery.refetch(); }} />;
   return <ServicesManager profile={profileQuery.data ?? {}} catalog={catalogQuery.data ?? []} />;

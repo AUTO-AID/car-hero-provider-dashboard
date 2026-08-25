@@ -166,6 +166,10 @@ export function OrderDetailsDialog({
                     variant="outline"
                     size="sm"
                     className="mt-2 w-full"
+                    // `nativeButton={false}`: هذا الزرّ يُصيَّر كـ <a> لا <button>،
+                    // وبدونها يحتجّ Base UI في كل فتح للنافذة ويُرسل الخطأ إلى
+                    // خادم التطوير مرّتين في كل مرّة.
+                    nativeButton={false}
                     render={<a href={`tel:${order.user.phoneNumber}`} />}
                   >
                     <Phone aria-hidden />
@@ -378,6 +382,7 @@ function MapLink({ order }: { order: Booking }) {
       variant="outline"
       size="sm"
       className="mt-2"
+      nativeButton={false}
       render={
         <a
           href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}

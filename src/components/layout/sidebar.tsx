@@ -255,9 +255,11 @@ export function Sidebar() {
   const warmRoute = useCallback(
     (href: string) => {
       if (href === pathname || warmedRoutesRef.current.has(href)) return;
-      // معطّل في التطوير: يُشعل إعادة تصريف Next لكل مسار عند المرور فوقه
-      if (process.env.NODE_ENV === "development") return;
 
+      // كان هذا معطّلاً في التطوير لأن `next dev --webpack` كان يصرّف المسار
+      // كاملاً عند كل مرور فوق رابطه (٢٧ ثانية لِـ /finance وحدها). مع
+      // Turbopack صار التصريف أقلّ من ثانية، فعاد التسخين إلى العمل في
+      // التطوير أيضاً — وهو بالضبط ما يجعل النقرة التالية فورية.
       warmedRoutesRef.current.add(href);
       router.prefetch(href);
 
