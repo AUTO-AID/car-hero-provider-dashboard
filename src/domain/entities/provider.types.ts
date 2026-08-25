@@ -24,6 +24,8 @@ export interface ProviderProfile {
   phoneNumber?: string;
   address?: string;
   city: string;
+  /** GeoJSON: [longitude, latitude] — يغذّي `/providers/nearby` عبر فهرس 2dsphere */
+  location?: { type?: string; coordinates?: [number, number] };
   isApproved?: boolean;
   isActive?: boolean;
   /** حالة التوفّر التي يراها العملاء — `/providers/nearby` يُرجع `online` فقط */

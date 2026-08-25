@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { MapPin, Phone, Save, Store, type LucideIcon } from "lucide-react";
+import { MapPin, Pencil, Phone, Save, Store, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { providerQueryKeys } from "@/application/services/prefetch";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,8 @@ import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { updateProviderProfile } from "@/infrastructure/services/profile.service";
+import { updateProviderLocation, updateProviderProfile } from "@/infrastructure/services/profile.service";
+import { LocationPicker, type LatLng } from "./location-picker";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -31,11 +32,27 @@ interface ProfileData {
  * الآن: ترويسة تُري المزوّد كيف يظهر نشاطه للعميل، ثمّ مجموعتان بعنوانين
  * يقولان ما فيهما — «نشاطك» و«أين تجدك».
  */
-export function ProfileForm({ initialData, phone }: { initialData: ProfileData; phone?: string }) {
+export function ProfileForm({
+  initialData,
+  phone,
+  initialCoords,
+}: {
+  initialData: ProfileData;
+  phone?: string;
+  initialCoords: LatLng | null;
+}) {
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState(initialData);
+  const [coords, setCoords] = useState<LatLng | null>(initialCoords);
+  const [manualAddress, setManualAddress] = useState(false);
   const normalized = useMemo(() => normalize(formData), [formData]);
-  const isDirty = JSON.stringify(normalized) !== JSON.stringify(normalize(initialData));
+  const coordsMoved =
+    coords !== null &&
+    (initialCoords === null ||
+      Math.abs(coords.lat - initialCoords.lat) > 1e-7 ||
+      Math.abs(coords.lng - initialCoords.lng) > 1e-7);
+  const isDirty =
+    JSON.stringify(normalized) !== JSON.stringify(normalize(initialData)) || coordsMoved;
 
   // الأخطاء تظهر تحت الحقل نفسه بدل toast يختفي قبل أن يعرف المستخدم أيّ حقل يقصد
   const errors = {
@@ -51,9 +68,14 @@ export function ProfileForm({ initialData, phone }: { initialData: ProfileData; 
     !errors.email;
 
   const mutation = useMutation({
-    mutationFn: (data: ProfileData) => {
+    mutationFn: async (data: ProfileData) => {
       const { email, ...payload } = data;
-      return updateProviderProfile(email ? { ...payload, email } : payload);
+      await updateProviderProfile(email ? { ...payload, email } : payload);
+      // الموقع نقطة نهاية منفصلة في الخادم (`PUT /providers/me/location`)،
+      // ولا يُرسل إلا حين تحرّك الدبّوس فعلاً.
+      if (coords && coordsMoved) {
+        await updateProviderLocation({ latitude: coords.lat, longitude: coords.lng });
+      }
     },
     onSuccess: async () => {
       toast.success("تم حفظ ملفّك");
@@ -147,15 +169,70 @@ export function ProfileForm({ initialData, phone }: { initialData: ProfileData; 
         </Field>
       </Section>
 
-      <Section icon={MapPin} title="أين يجدك العميل" description="عنوانك ووسيلة التواصل معك.">
-        <Field label="المدينة أو المحافظة" required error={errors.city}>
-          <Input
-            value={formData.city}
-            onChange={(event) => update("city", event.target.value)}
-            maxLength={100}
-            className="h-11"
+      <Section
+        icon={MapPin}
+        title="أين يجدك العميل"
+        description="حدّد موقع ورشتك على الخريطة — منه يجدك العملاء القريبون."
+      >
+        <div className="col-span-full">
+          <LocationPicker
+            value={coords}
+            onChange={setCoords}
+            // العنوان يُملأ تلقائياً من الخريطة، ويبقى قابلاً للتصحيح يدوياً
+            onResolveAddress={(resolved) =>
+              setFormData((current) => ({
+                ...current,
+                city: resolved.city || current.city,
+                address: resolved.address || current.address,
+              }))
+            }
           />
-        </Field>
+        </div>
+
+        {/* العنوان النصّي نتيجةٌ لا مُدخَل: يُقرأ من الخريطة ويُعرض للتأكيد.
+            الحقلان يبقيان خلف زرّ لأن الترجمة العكسية قد تُخطئ اسم الحيّ في
+            المدن السورية، ولأن `city` مفهرسة في الخادم ويُبحث بها. */}
+        <div className="col-span-full rounded-xl border border-border/60 bg-secondary/25 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-muted-foreground">العنوان المقروء من الخريطة</p>
+              <p className="mt-1 text-base font-semibold text-foreground">
+                {[normalized.city, normalized.address].filter(Boolean).join(" — ") || "لم يُحدَّد بعد"}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setManualAddress((current) => !current)}
+              aria-expanded={manualAddress}
+            >
+              <Pencil aria-hidden /> {manualAddress ? "إخفاء التعديل اليدوي" : "تعديل يدوي"}
+            </Button>
+          </div>
+
+          {manualAddress && (
+            <div className="mt-4 grid grid-cols-1 gap-5 md:grid-cols-2">
+              <Field label="المدينة أو المحافظة" required error={errors.city}>
+                <Input
+                  value={formData.city}
+                  onChange={(event) => update("city", event.target.value)}
+                  maxLength={100}
+                  className="h-11"
+                />
+              </Field>
+              <Field label="العنوان التفصيلي" full>
+                <Input
+                  value={formData.address}
+                  onChange={(event) => update("address", event.target.value)}
+                  placeholder="مثال: شارع بغداد، مقابل حديقة السبكي"
+                  maxLength={300}
+                  className="h-11"
+                />
+              </Field>
+            </div>
+          )}
+        </div>
 
         <Field label="البريد الإلكتروني" hint="اختياري — للتقارير والإشعارات." error={errors.email}>
           <Input
@@ -165,16 +242,6 @@ export function ProfileForm({ initialData, phone }: { initialData: ProfileData; 
             value={formData.email}
             onChange={(event) => update("email", event.target.value)}
             maxLength={160}
-            className="h-11"
-          />
-        </Field>
-
-        <Field label="العنوان التفصيلي" full>
-          <Input
-            value={formData.address}
-            onChange={(event) => update("address", event.target.value)}
-            placeholder="مثال: شارع بغداد، مقابل حديقة السبكي"
-            maxLength={300}
             className="h-11"
           />
         </Field>

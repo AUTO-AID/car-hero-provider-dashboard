@@ -42,10 +42,18 @@ export default function ProviderSettingsPage() {
 
   const provider = (profileQuery.data ?? {}) as Partial<ProviderProfile>;
 
+  // GeoJSON يخزّن [lng, lat]؛ العكس يضع الورشة في نصف كرة آخر.
+  // و(0,0) هي ما يكتبه الخادم حين لا يصل موقع عند التسجيل — تُعامَل كـ«بلا موقع»
+  // فتفتح الخريطة على مركز افتراضي بدل خليج غينيا.
+  const [lng, lat] = provider.location?.coordinates ?? [];
+  const hasCoords =
+    typeof lat === "number" && typeof lng === "number" && !(lat === 0 && lng === 0);
+
   return (
     <ProfileForm
       key={provider.updatedAt ?? "profile"}
       phone={provider.phone ?? ""}
+      initialCoords={hasCoords ? { lat, lng } : null}
       initialData={{
         businessName: provider.businessName ?? "",
         ownerName: provider.ownerName ?? "",

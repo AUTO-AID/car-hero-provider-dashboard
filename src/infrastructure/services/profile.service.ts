@@ -18,6 +18,20 @@ export type ProviderAvailability = "online" | "busy" | "offline";
 export const updateProviderStatus = (status: ProviderAvailability) =>
   api.put("/providers/me/status", { status }).then((res) => unwrapApiData<ProviderProfile>(res.data));
 
+/**
+ * موقع النشاط على الخريطة.
+ *
+ * `PUT /providers/me/location` كان جاهزاً في الخلفية منذ البداية (يتحقّق من
+ * المدى ويكتب `location` بفهرس 2dsphere الذي يقوم عليه `/providers/nearby`)
+ * ولم تكن اللوحة تستدعيه قطّ — فكان موقع الورشة هو ما سُجّل لحظة التسجيل
+ * ولا سبيل إلى تصحيحه.
+ *
+ * الترتيب هنا مسمّى لا موضعيّ عمداً: الخادم يقرأ `longitude`/`latitude`
+ * بينما GeoJSON يخزّنها `[lng, lat]` — وعكسها يضع الورشة في نصف كرة آخر.
+ */
+export const updateProviderLocation = (coords: { longitude: number; latitude: number }) =>
+  api.put("/providers/me/location", coords).then((res) => unwrapApiData<ProviderProfile>(res.data));
+
 export const getServiceCatalog = () =>
   api.get("/services").then((res) => unwrapApiData<ServiceCatalogItem[]>(res.data));
 
