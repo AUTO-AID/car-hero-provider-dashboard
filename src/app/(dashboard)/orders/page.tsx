@@ -3,7 +3,7 @@
 import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
-import { CalendarClock, CheckCircle2, History, Package, XCircle } from "lucide-react";
+import { CalendarClock, CheckCircle2, ClipboardList, History, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { providerQueryKeys } from "@/application/services/prefetch";
 import { Booking } from "@/domain/entities/booking.types";
@@ -247,12 +247,12 @@ export default function ProviderOrdersPage() {
     sortOrder !== "desc" && { key: "sortOrder", label: ORDER_LABELS.asc, onRemove: () => { setSortOrder("desc"); setPage(1); } },
   ].filter(Boolean) as ActiveFilterChip[];
   const hasFilters = chips.length > 0;
-  const emptyIcon = view === "appointments" ? CalendarClock : view === "history" ? History : Package;
+  const emptyIcon = view === "appointments" ? CalendarClock : view === "history" ? History : ClipboardList;
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard title="إجمالي النتائج" value={pagination?.total ?? 0} icon={Package} />
+      <div className="grid grid-cols-2 gap-3 min-[1366px]:grid-cols-4">
+        <StatCard title="إجمالي النتائج" value={pagination?.total ?? 0} icon={ClipboardList} />
         <StatCard title="الطلبات المكتملة" value={completedCount} icon={CheckCircle2} tone="success" />
         <StatCard title="المواعيد المجدولة" value={facets?.totals.scheduled ?? 0} icon={CalendarClock} tone="info" />
         <StatCard title="الملغاة والمرفوضة" value={cancelledCount} icon={XCircle} tone="danger" />

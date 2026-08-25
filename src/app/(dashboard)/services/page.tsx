@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, Package, Wrench } from "lucide-react";
+import { BookOpen, CheckCircle2, PauseCircle, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { providerQueryKeys } from "@/application/services/prefetch";
 import { Button } from "@/components/ui/button";
@@ -77,11 +77,11 @@ function ServicesManager({ profile, catalog }: { profile: { services?: string[];
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard title="خدماتي" value={services.length} icon={Wrench} tone="info" />
         <StatCard title="متاحة للحجز" value={activeCount} icon={CheckCircle2} tone="success" />
-        <StatCard title="متوقّفة مؤقتاً" value={services.length - activeCount} icon={AlertCircle} tone="danger" />
-        <StatCard title="كتالوج المنصّة" value={catalogSize} icon={Package} />
+        <StatCard title="متوقّفة مؤقتاً" value={services.length - activeCount} icon={PauseCircle} tone="danger" />
+        <StatCard title="كتالوج المنصّة" value={catalogSize} icon={BookOpen} />
       </div>
 
       <DataToolbar

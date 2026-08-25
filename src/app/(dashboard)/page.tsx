@@ -13,7 +13,7 @@ import { OverviewServicesRadar } from "./components/overview-services-radar";
 import { OverviewStatusDonut } from "./components/overview-status-donut";
 import { OverviewRecentBookings } from "./components/overview-recent-bookings";
 import { OverviewAlerts } from "./components/overview-alerts";
-import { Package, Wallet, Star, Zap } from "lucide-react";
+import { Banknote, ClipboardList, Star, Wrench } from "lucide-react";
 import { StatCard } from "@/components/ui/stat-card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -68,15 +68,12 @@ export default function ProviderDashboardHome() {
     activeServices: activeServicesCount,
   };
 
-  const revenueSparkline = chartData.map((d) => d.earnings);
-  const ordersSparkline = chartData.map((d) => d.orders);
-
   if (isProfileLoading || isStatsLoading) {
     return (
       <div className="space-y-6">
         <Skeleton className="h-12 w-72" />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[Package, Wallet, Star, Zap].map((Icon, index) => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {[ClipboardList, Banknote, Star, Wrench].map((Icon, index) => (
             <StatCard key={index} title="" value="" icon={Icon} loading />
           ))}
         </div>
@@ -110,10 +107,7 @@ export default function ProviderDashboardHome() {
         pendingBookings={orderCounts.pending || 0}
         totalRevenue={stats.totalRevenue}
         averageRating={stats.averageRating}
-        totalReviews={summary.totalReviews || 0}
         activeServices={stats.activeServices}
-        revenueSparkline={revenueSparkline}
-        ordersSparkline={ordersSparkline}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

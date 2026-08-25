@@ -1,7 +1,7 @@
 "use client";
 
 import { StatCard } from "@/components/ui/stat-card";
-import { Package, Wallet, Star, Zap } from "lucide-react";
+import { Banknote, ClipboardList, Star, Wrench } from "lucide-react";
 import { currencyLabel, formatAmount, formatNumber } from "@/lib/format";
 
 interface OverviewStatsCardsProps {
@@ -9,17 +9,7 @@ interface OverviewStatsCardsProps {
   pendingBookings: number;
   totalRevenue: number;
   averageRating: number;
-  totalReviews: number;
   activeServices: number;
-  revenueSparkline: number[];
-  ordersSparkline: number[];
-}
-
-function normalizeSparkline(data: number[]): number[] {
-  if (!data || data.length === 0) return [];
-  const max = Math.max(...data);
-  if (max === 0) return [];
-  return data.map((value) => value / max);
 }
 
 export function OverviewStatsCards({
@@ -27,54 +17,40 @@ export function OverviewStatsCards({
   pendingBookings,
   totalRevenue,
   averageRating,
-  totalReviews,
   activeServices,
-  revenueSparkline,
-  ordersSparkline,
 }: OverviewStatsCardsProps) {
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 stagger">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 stagger">
+      {/* الشارة تظهر فقط حين يوجد ما ينتظر ردّ المزوّد. الحالة الصفرية كانت
+          تكتب «لا شيء بانتظار إجراء» — سطر يشغل مساحة ليقول إنه لا خبر. */}
       <StatCard
         title="إجمالي الطلبات"
         value={totalBookings}
-        icon={Package}
+        icon={ClipboardList}
         subtitle={
           pendingBookings > 0
-            ? `${formatNumber(pendingBookings)} بانتظار إجراء منك`
-            : "لا شيء بانتظار إجراء"
+            ? `${formatNumber(pendingBookings)} بانتظار ردّك`
+            : undefined
         }
         tone={pendingBookings > 0 ? "warning" : "primary"}
-        sparkline={normalizeSparkline(ordersSparkline)}
       />
       <StatCard
         title="إجمالي الأرباح"
         value={`${formatAmount(totalRevenue)} ${currencyLabel()}`}
-        icon={Wallet}
+        icon={Banknote}
         tone="info"
-        subtitle={
-          revenueSparkline.length
-            ? `على مدى ${formatNumber(revenueSparkline.length)} أشهر`
-            : "لا توجد أرباح مسجّلة بعد"
-        }
-        sparkline={normalizeSparkline(revenueSparkline)}
       />
       <StatCard
         title="التقييم العام"
         value={averageRating ? averageRating.toFixed(1) : "—"}
         icon={Star}
         tone="warning"
-        subtitle={
-          totalReviews > 0
-            ? `بناءً على ${formatNumber(totalReviews)} تقييم`
-            : "لم يصلك تقييم بعد"
-        }
       />
       <StatCard
         title="الخدمات المتاحة"
         value={activeServices}
-        icon={Zap}
+        icon={Wrench}
         tone="success"
-        subtitle={activeServices === 0 ? "لم تُضف خدمات بعد" : "فئة مسجّلة في ملفك"}
       />
     </div>
   );

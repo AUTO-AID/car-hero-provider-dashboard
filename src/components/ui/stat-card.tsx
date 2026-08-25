@@ -23,13 +23,16 @@ const TONES = {
 interface StatCardProps {
   title: string;
   value: string | number;
+  /**
+   * سطر تنبيه يظهر كشارة ملوّنة تحت الرقم. لأنه يُرسم بوزن بصري عالٍ،
+   * لا يُمرَّر إلا لِما يستدعي تصرّفاً — «٣ طلبات تنتظر ردّك» نعم،
+   * «على مدى ٧ أشهر» لا. الحشو هنا يسرق الانتباه من الرقم نفسه.
+   */
   subtitle?: string;
   icon: LucideIcon;
   tone?: keyof typeof TONES;
   loading?: boolean;
   children?: ReactNode;
-  /** أعمدة صغيرة تلخّص اتجاهاً — قيم مطبَّعة بين 0 و1 */
-  sparkline?: number[];
   className?: string;
 }
 
@@ -41,51 +44,51 @@ export function StatCard({
   tone = "primary",
   loading,
   children,
-  sparkline,
   className,
 }: StatCardProps) {
   if (loading) {
     return (
-      <Card className={cn("gap-4 p-5", className)}>
-        <Skeleton className="size-11 rounded-xl" />
-        <Skeleton className="h-8 w-24" />
-        <Skeleton className="h-4 w-32" />
+      <Card className={cn("gap-3 p-5", className)}>
+        <div className="flex items-center gap-3">
+          <Skeleton className="size-12 rounded-xl" />
+          <Skeleton className="h-5 w-28" />
+        </div>
+        <Skeleton className="h-9 w-24" />
       </Card>
     );
   }
 
   return (
     <Card className={cn("gap-3 p-5 transition-colors hover:border-border", className)}>
-      <div className="flex items-start justify-between gap-3">
+      {/* العنوان بجانب الأيقونة لا تحته: القارئ يعرف ما يقيسه الرقم قبل أن
+          يقرأه، لا بعده. وكانت مكانه أعمدة اتجاه صغيرة بلا محور ولا مقياس —
+          تزيّن ولا تُقرأ، والجمهور هنا ورشات لا محلّلو بيانات. */}
+      <div className="flex items-center gap-3">
         <span
           className={cn(
-            "flex size-11 shrink-0 items-center justify-center rounded-xl border",
+            "flex size-12 shrink-0 items-center justify-center rounded-xl border",
             TONES[tone]
           )}
         >
-          <Icon className="size-5" aria-hidden />
+          <Icon className="size-6" aria-hidden />
         </span>
-
-        {sparkline && sparkline.length > 0 && (
-          <div className="flex h-8 flex-1 items-end justify-end gap-[3px]" aria-hidden>
-            {sparkline.map((height, index) => (
-              <div
-                key={index}
-                className="w-1.5 rounded-sm bg-primary/35"
-                style={{ height: `${Math.max(height, 0.06) * 100}%` }}
-              />
-            ))}
-          </div>
-        )}
+        <p className="min-w-0 text-lg leading-snug font-bold text-foreground">{title}</p>
       </div>
 
-      <div className="space-y-0.5">
-        <p className="text-3xl leading-none font-bold text-foreground tabular-nums">
-          {typeof value === "number" ? formatNumber(value) : value}
-        </p>
-        <p className="text-sm font-medium text-muted-foreground">{title}</p>
-        {subtitle && <p className="text-xs text-muted-foreground/80">{subtitle}</p>}
-      </div>
+      <p className="text-4xl leading-none font-bold text-foreground tabular-nums">
+        {typeof value === "number" ? formatNumber(value) : value}
+      </p>
+
+      {subtitle && (
+        <span
+          className={cn(
+            "inline-flex w-fit items-center rounded-lg border px-2.5 py-1 text-sm font-semibold",
+            TONES[tone]
+          )}
+        >
+          {subtitle}
+        </span>
+      )}
 
       {children}
     </Card>
