@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, CheckCircle2, PauseCircle, Wrench } from "lucide-react";
+import { Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { providerQueryKeys } from "@/application/services/prefetch";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,6 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { getProviderProfile, getServiceCatalog, updateProviderServices } from "@/infrastructure/services/profile.service";
 import { ServiceCatalogItem } from "@/domain/entities/provider.types";
 import { ServiceCard } from "./components/service-card";
-import { StatCard } from "@/components/ui/stat-card";
 
 type Filter = "all" | "mine" | "enabled" | "disabled";
 const categoryLabels: Record<string, string> = {
@@ -66,9 +65,6 @@ function ServicesManager({ profile, catalog }: { profile: { services?: string[];
     onError: () => toast.error("تعذر تحديث الخدمات. راجع البيانات وحاول مجدداً."),
   });
   const save = (nextServices: string[], nextPrices = prices, nextAvailability = availability) => mutation.mutate({ services: nextServices, servicePrices: pick(nextPrices, nextServices), serviceAvailability: pickAvailability(nextAvailability, nextServices) });
-  const activeCount = services.filter((id) => availability[id] !== false).length;
-
-  const catalogSize = dedupeCatalog(catalog, selected).length;
   const chips: ActiveFilterChip[] = [
     search && { key: "search", label: `بحث: ${search}`, onRemove: () => setSearch("") },
     category !== "all" && { key: "category", label: `الفئة: ${categoryLabels[category]}`, onRemove: () => setCategory("all") },
@@ -77,13 +73,6 @@ function ServicesManager({ profile, catalog }: { profile: { services?: string[];
 
   return (
     <div className="space-y-6 animate-fade-in-up">
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatCard title="خدماتي" value={services.length} icon={Wrench} tone="info" />
-        <StatCard title="متاحة للحجز" value={activeCount} icon={CheckCircle2} tone="success" />
-        <StatCard title="متوقّفة مؤقتاً" value={services.length - activeCount} icon={PauseCircle} tone="danger" />
-        <StatCard title="كتالوج المنصّة" value={catalogSize} icon={BookOpen} />
-      </div>
-
       <DataToolbar
         searchValue={search}
         onSearchChange={setSearch}
