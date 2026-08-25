@@ -16,7 +16,7 @@ describe("wallet.service", () => {
     mockedGet.mockReset();
   });
 
-  it("loads the wallet with its balance and financial summary", async () => {
+  it("rewrites the legacy SAR default to the platform currency", async () => {
     mockedGet.mockResolvedValueOnce({
       data: {
         success: true,
@@ -30,12 +30,22 @@ describe("wallet.service", () => {
       },
     });
 
+    // المحافظ المُنشأة قبل إصلاح `wallet.schema.ts` تحمل `SAR` في قاعدة
+    // البيانات بينما المبالغ فيها ليرات سورية — تُصحَّح عند القراءة.
     await expect(getProviderWallet()).resolves.toMatchObject({
       balance: 16_382.78,
-      currency: "SAR",
+      currency: "SYP",
       summary: { openingBalance: 14_263.28 },
     });
     expect(mockedGet).toHaveBeenCalledWith("/provider/wallet/me");
+  });
+
+  it("leaves any other stored currency untouched", async () => {
+    mockedGet.mockResolvedValueOnce({
+      data: { success: true, data: { balance: 10, pendingBalance: 0, currency: "USD", isActive: true, summary: {} } },
+    });
+
+    await expect(getProviderWallet()).resolves.toMatchObject({ currency: "USD" });
   });
 
   it("loads provider transactions with filters", async () => {

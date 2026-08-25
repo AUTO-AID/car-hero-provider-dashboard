@@ -7,9 +7,16 @@ import { Money } from "@/components/ui/money";
 import { formatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-/** عناوين عربية للحركة. الوصف الخام من الخادم إنجليزي ولا يُعرض. */
-const KIND_LABELS: Record<string, string> = {
-  order: "أرباح طلب",
+/**
+ * مصدر الحركة — لا «أرباح طلب».
+ *
+ * كان العنوان الأبرز في الصفّ هو «أرباح طلب»، وهو يكرّر على كل سطر ما تقوله
+ * الصفحة كلّها: السجلّ أرباح. فيسرق أعرض خطّ في الصفّ من الرقم الذي يفتح
+ * المزوّد الصفحة لأجله. العنوان الآن سطر ثانوي يقول **من أين** جاء المبلغ،
+ * والرقم هو البطل.
+ */
+const SOURCE_LABELS: Record<string, string> = {
+  order: "من طلب مكتمل",
   payout: "سحب إلى حسابك",
   withdrawal: "سحب رصيد",
   payout_reversal: "إرجاع مبلغ سحب",
@@ -31,41 +38,49 @@ export function TransactionRow({ tx, currency }: { tx: Transaction; currency?: s
   const amount = Math.abs(tx.amount ?? 0);
   const attention = ATTENTION_STATUS[tx.status];
   const Icon: LucideIcon = isCredit ? ArrowDownLeft : ArrowUpRight;
+  const source = SOURCE_LABELS[tx.referenceType ?? ""] ?? (isCredit ? "إضافة إلى رصيدك" : "خصم من رصيدك");
 
   return (
-    <li className="flex items-center gap-3 rounded-xl border border-border/60 bg-card p-3 sm:gap-4 sm:p-4">
+    <li
+      className={cn(
+        "flex items-center gap-3.5 rounded-xl border border-border/60 bg-card p-4 transition-colors",
+        "hover:border-border sm:gap-4 sm:p-5"
+      )}
+    >
       <span
         aria-hidden
         className={cn(
-          "flex size-11 shrink-0 items-center justify-center rounded-xl border",
+          "flex size-12 shrink-0 items-center justify-center rounded-xl border",
           isCredit
             ? "border-success/25 bg-success/10 text-success-soft"
             : "border-danger/25 bg-danger/10 text-danger-soft"
         )}
       >
-        <Icon className="size-5" />
+        <Icon className="size-6" />
       </span>
 
+      {/* المبلغ أوّلاً وبأكبر خطّ في الصفّ: هو السؤال الوحيد الذي يُطرح على
+          هذا السطر — «كم ربحت من هذا الطلب؟» */}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="truncate text-[0.95rem] font-bold text-foreground">
-          {KIND_LABELS[tx.referenceType ?? ""] ?? (isCredit ? "إضافة رصيد" : "خصم رصيد")}
-        </span>
-        <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-          <span className="tabular-nums">{formatTime(tx.createdAt)}</span>
-          <span aria-hidden>·</span>
-          <span className="truncate font-mono text-xs" dir="ltr">
-            {tx.transactionNumber}
-          </span>
-        </span>
-      </div>
-
-      <div className="flex shrink-0 flex-col items-end gap-1.5">
         <Money
           value={isCredit ? amount : -amount}
           currency={currency}
-          signed
-          className={cn("text-sm font-bold", isCredit ? "text-success-soft" : "text-danger-soft")}
+          signed={!isCredit}
+          className={cn(
+            "text-2xl leading-none font-bold",
+            isCredit ? "text-success-soft" : "text-danger-soft"
+          )}
         />
+        <span className="truncate text-sm font-semibold text-muted-foreground">{source}</span>
+      </div>
+
+      <div className="flex shrink-0 flex-col items-end gap-1.5 text-end">
+        <span className="text-sm font-semibold text-foreground tabular-nums">
+          {formatTime(tx.createdAt)}
+        </span>
+        <span className="font-mono text-[11px] text-muted-foreground/70" dir="ltr">
+          {tx.transactionNumber}
+        </span>
         {attention && (
           <Badge variant={attention.variant} className="h-6 rounded-full border px-2.5 font-semibold">
             {attention.label}
