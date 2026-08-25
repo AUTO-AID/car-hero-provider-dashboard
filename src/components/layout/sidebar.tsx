@@ -69,49 +69,41 @@ function NavContent({
     <>
       <div
         className={cn(
-          "flex shrink-0 flex-col gap-2 border-b border-border/60 py-3",
-          collapsed ? "items-center px-2" : "px-4"
+          "flex shrink-0 items-center gap-2 border-b border-border/60",
+          collapsed ? "h-auto flex-col justify-center gap-2 px-2 py-3" : "h-16 px-4"
         )}
       >
-        <div className={cn("flex h-10 w-full items-center gap-2", collapsed && "justify-center")}>
-          {collapsed ? (
-            <ConnectionBadge collapsed />
-          ) : (
-            <>
-              <Image
-                src="/logo_carHero.png"
-                alt="كار هيرو"
-                width={112}
-                height={36}
-                className="h-9 w-[112px] shrink-0 object-contain"
-                priority
-              />
-              <span className="flex-1" />
-              <ConnectionBadge collapsed={false} />
-            </>
-          )}
-        </div>
+        {!collapsed && (
+          <>
+            <Image
+              src="/logo_carHero.png"
+              alt="كار هيرو"
+              width={112}
+              height={36}
+              className="h-9 w-[112px] shrink-0 object-contain"
+              priority
+            />
+            <span className="flex-1" />
+          </>
+        )}
 
-        {/* زرّ الطيّ داخل الشريط لا معلّقاً على حافّته الخارجية.
-            كان زرّاً بقياس 32px نصفه خارج الشريط بلا تسمية مرئية، فلم يكن
-            يُعثر عليه أصلاً — والمزوّد لا يبحث عن زرّ لا يعرف بوجوده. */}
+        <ConnectionBadge collapsed={collapsed} />
+
+        {/* زرّ الطيّ داخل الشريط لا معلّقاً على حافّته الخارجية: كان بقياس
+            32px نصفه خارج حدود الشريط، فلم يكن يُعثر عليه أصلاً. أيقونة
+            وحدها بلا نصّ — والتسمية في `aria-label` و`title` للتلميح ولقارئ
+            الشاشة. */}
         {onToggleCollapse && (
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon-sm"
             onClick={onToggleCollapse}
             aria-label={collapsed ? "توسيع الشريط الجانبي" : "طيّ الشريط الجانبي"}
             title={collapsed ? "توسيع الشريط الجانبي" : "طيّ الشريط الجانبي"}
             aria-expanded={!collapsed}
-            className={cn("text-muted-foreground", collapsed ? "w-10 px-0" : "w-full justify-start")}
+            className="shrink-0 text-muted-foreground hover:text-foreground"
           >
-            {collapsed ? (
-              <PanelRightClose aria-hidden />
-            ) : (
-              <>
-                <PanelRightOpen aria-hidden /> طيّ القائمة
-              </>
-            )}
+            {collapsed ? <PanelRightClose aria-hidden /> : <PanelRightOpen aria-hidden />}
           </Button>
         )}
       </div>
