@@ -53,7 +53,7 @@ export function TransactionRow({ tx, currency }: { tx: Transaction; currency?: s
         <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
           <span className="tabular-nums">{formatTime(tx.createdAt)}</span>
           <span aria-hidden>·</span>
-          <span className="truncate font-mono text-[11px]" dir="ltr">
+          <span className="truncate font-mono text-xs" dir="ltr">
             {tx.transactionNumber}
           </span>
         </span>

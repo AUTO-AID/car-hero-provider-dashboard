@@ -58,7 +58,7 @@ export function Field({
     <div className={cn("group space-y-2", full && "col-span-full", className)}>
       <label
         htmlFor={controlId}
-        className="flex items-center gap-2 text-[13px] font-semibold text-muted-foreground transition-colors group-focus-within:text-primary"
+        className="flex items-center gap-2 text-sm font-semibold text-foreground/80 transition-colors group-focus-within:text-primary"
       >
         {Icon && (
           <Icon

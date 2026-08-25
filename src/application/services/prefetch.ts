@@ -1,9 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
-import {
-  getAccountProfile,
-  getProviderProfile,
-  getServiceCatalog,
-} from "@/infrastructure/services/profile.service";
+import { getProviderProfile, getServiceCatalog } from "@/infrastructure/services/profile.service";
 import {
   getProviderOrders,
   getProviderOrdersSummary,
@@ -16,7 +12,6 @@ export const ORDERS_PAGE_SIZE = 15;
 
 export const providerQueryKeys = {
   profile: ["provider-profile"] as const,
-  account: ["provider-account"] as const,
   serviceCatalog: ["service-catalog"] as const,
   // القائمة والملخّص تحت الجذر نفسه: إبطال واحد عند وصول حدث سوكِت
   // يُحدّث الصفحة المعروضة وعدّادات الرقاقات معاً، ولا يترك أحدهما متأخّراً.
@@ -50,6 +45,7 @@ export function prefetchProviderRouteData(
     case "/working-hours":
       return profile();
 
+
     /**
      * كل مسار يُسخّن **ما تنتظره صفحته فعلاً**، لا الملف الشخصي وحده.
      *
@@ -67,14 +63,9 @@ export function prefetchProviderRouteData(
         }),
       ]);
 
+    // `/settings` صار الملف الشخصي وحده بعد حذف تبويبَي الوثائق والأمان
     case "/settings":
-      return Promise.all([
-        profile(),
-        queryClient.prefetchQuery({
-          queryKey: providerQueryKeys.account,
-          queryFn: getAccountProfile,
-        }),
-      ]);
+      return profile();
     case "/orders": {
       // نفس الوسائط التي تطلبها الصفحة عند أوّل تصيير — أيّ اختلاف يجعل
       // المفتاح مختلفاً فيذهب الجلب المسبق هدراً وتبدأ الصفحة بهيكل عظمي.

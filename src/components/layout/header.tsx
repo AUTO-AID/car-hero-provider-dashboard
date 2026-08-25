@@ -48,17 +48,17 @@ export function Header() {
         </span>
 
         <div className="min-w-0">
-          <h1 className="truncate text-[15px] leading-tight font-bold text-foreground">
+          <h1 className="truncate text-lg leading-tight font-bold text-foreground">
             {route.title}
           </h1>
-          <p className="hidden truncate text-[11px] text-muted-foreground sm:block">
+          <p className="hidden truncate text-xs text-muted-foreground sm:block">
             {route.description}
           </p>
         </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
-        <span className="hidden items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-[11px] whitespace-nowrap text-muted-foreground xl:flex">
+        <span className="hidden items-center gap-1.5 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5 text-xs whitespace-nowrap text-muted-foreground xl:flex">
           <CalendarDays className="size-3.5 shrink-0 text-primary" aria-hidden />
           <span suppressHydrationWarning>{mounted ? today : ""}</span>
         </span>

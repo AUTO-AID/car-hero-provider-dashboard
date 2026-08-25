@@ -1,15 +1,21 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Sans_Arabic, IBM_Plex_Mono } from "next/font/google";
+import { Cairo, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 
-/* الخط الأساسي للواجهة العربية — أوزان 400..700 (لا يوجد 900 في هذه العائلة،
-   لذلك يُربط font-black بـ 700 في globals.css تفادياً للتغميق الصناعي
-   الذي يشوّه اتصال الحروف العربية) */
-const sansArabic = IBM_Plex_Sans_Arabic({
+/**
+ * الخط الأساسي: **Cairo**.
+ *
+ * كان IBM Plex Sans Arabic، وهو خط نصّي رفيع الحروف مصمَّم للمتون الطويلة —
+ * فبدا في واجهة كثيفة الأزرار والشارات باهتاً وصعب القراءة على شاشة داكنة،
+ * خصوصاً في المقاسات الصغيرة. Cairo أعرض ريشةً وأوضح عدّادات، وهو الخط
+ * السائد في واجهات التحكّم العربية، ويصل إلى الوزن 1000 فلا يحتاج المتصفّح
+ * إلى تغميق صناعي يشوّه اتصال الحروف.
+ */
+const sansArabic = Cairo({
   variable: "--font-sans-arabic",
   subsets: ["arabic", "latin"],
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700", "800"],
   display: "swap",
 });
 

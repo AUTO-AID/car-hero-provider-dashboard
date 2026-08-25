@@ -32,7 +32,7 @@ function ConnectionBadge({ collapsed }: { collapsed: boolean }) {
       aria-label={label}
       title={label}
       className={cn(
-        "flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-bold",
+        "flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-bold",
         isConnected
           ? "border-success/25 bg-success/10 text-success-soft"
           : "border-warning/25 bg-warning/10 text-warning-soft"
@@ -50,9 +50,18 @@ interface NavContentProps {
   collapsed: boolean;
   onNavigate?: () => void;
   onWarmRoute: (href: string) => void;
+  /** يُمرَّر للشريط المكتبي وحده — درج الجوال يُغلق لا يُطوى */
+  onToggleCollapse?: () => void;
 }
 
-function NavContent({ navLabel, pathname, collapsed, onNavigate, onWarmRoute }: NavContentProps) {
+function NavContent({
+  navLabel,
+  pathname,
+  collapsed,
+  onNavigate,
+  onWarmRoute,
+  onToggleCollapse,
+}: NavContentProps) {
   const { provider, logout } = useAuth();
   const initials = (provider?.name || provider?.businessName || "م").charAt(0).toUpperCase();
 
@@ -60,25 +69,50 @@ function NavContent({ navLabel, pathname, collapsed, onNavigate, onWarmRoute }: 
     <>
       <div
         className={cn(
-          "flex h-16 shrink-0 items-center gap-2 border-b border-border/60",
-          collapsed ? "justify-center px-2" : "px-4"
+          "flex shrink-0 flex-col gap-2 border-b border-border/60 py-3",
+          collapsed ? "items-center px-2" : "px-4"
         )}
       >
-        {collapsed ? (
-          <ConnectionBadge collapsed />
-        ) : (
-          <>
-            <Image
-              src="/logo_carHero.png"
-              alt="كار هيرو"
-              width={112}
-              height={36}
-              className="h-9 w-[112px] shrink-0 object-contain"
-              priority
-            />
-            <span className="flex-1" />
-            <ConnectionBadge collapsed={false} />
-          </>
+        <div className={cn("flex h-10 w-full items-center gap-2", collapsed && "justify-center")}>
+          {collapsed ? (
+            <ConnectionBadge collapsed />
+          ) : (
+            <>
+              <Image
+                src="/logo_carHero.png"
+                alt="كار هيرو"
+                width={112}
+                height={36}
+                className="h-9 w-[112px] shrink-0 object-contain"
+                priority
+              />
+              <span className="flex-1" />
+              <ConnectionBadge collapsed={false} />
+            </>
+          )}
+        </div>
+
+        {/* زرّ الطيّ داخل الشريط لا معلّقاً على حافّته الخارجية.
+            كان زرّاً بقياس 32px نصفه خارج الشريط بلا تسمية مرئية، فلم يكن
+            يُعثر عليه أصلاً — والمزوّد لا يبحث عن زرّ لا يعرف بوجوده. */}
+        {onToggleCollapse && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? "توسيع الشريط الجانبي" : "طيّ الشريط الجانبي"}
+            title={collapsed ? "توسيع الشريط الجانبي" : "طيّ الشريط الجانبي"}
+            aria-expanded={!collapsed}
+            className={cn("text-muted-foreground", collapsed ? "w-10 px-0" : "w-full justify-start")}
+          >
+            {collapsed ? (
+              <PanelRightClose aria-hidden />
+            ) : (
+              <>
+                <PanelRightOpen aria-hidden /> طيّ القائمة
+              </>
+            )}
+          </Button>
         )}
       </div>
 
@@ -86,7 +120,7 @@ function NavContent({ navLabel, pathname, collapsed, onNavigate, onWarmRoute }: 
         {NAV_GROUPS.map((group) => (
           <div key={group.group}>
             {!collapsed && (
-              <p className="mb-2 px-2 text-[11px] font-bold text-muted-foreground">{group.group}</p>
+              <p className="mb-2 px-2 text-xs font-bold text-muted-foreground">{group.group}</p>
             )}
             <ul className="space-y-1">
               {group.hrefs.map((href) => {
@@ -106,7 +140,7 @@ function NavContent({ navLabel, pathname, collapsed, onNavigate, onWarmRoute }: 
                       aria-current={active ? "page" : undefined}
                       title={collapsed ? route.label : undefined}
                       className={cn(
-                        "group relative flex min-h-11 items-center gap-3 rounded-lg text-[13px] font-medium transition-colors",
+                        "group relative flex min-h-11 items-center gap-3 rounded-lg text-[15px] font-semibold transition-colors",
                         collapsed ? "justify-center px-0" : "px-3",
                         active
                           ? "bg-primary/12 text-primary"
@@ -116,7 +150,7 @@ function NavContent({ navLabel, pathname, collapsed, onNavigate, onWarmRoute }: 
                       {active && (
                         <span className="absolute inset-y-2 start-0 w-[3px] rounded-e-full bg-primary" aria-hidden />
                       )}
-                      <route.icon className="size-4 shrink-0" aria-hidden />
+                      <route.icon className="size-[18px] shrink-0" aria-hidden />
                       {collapsed ? (
                         <span className="sr-only">{route.label}</span>
                       ) : (
@@ -152,37 +186,29 @@ function NavContent({ navLabel, pathname, collapsed, onNavigate, onWarmRoute }: 
           {!collapsed && (
             <>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-bold text-foreground">
+                <p className="truncate text-sm font-bold text-foreground">
                   {provider?.name || provider?.businessName || "المزوّد"}
                 </p>
-                <p className="truncate text-[11px] text-muted-foreground">مزوّد خدمة</p>
+                <p className="truncate text-xs text-muted-foreground">مزوّد خدمة</p>
               </div>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={logout}
-                aria-label="تسجيل الخروج"
-                title="تسجيل الخروج"
-                className="text-muted-foreground hover:bg-danger/10 hover:text-danger-soft"
-              >
-                <LogOut aria-hidden />
-              </Button>
             </>
           )}
         </div>
 
-        {collapsed && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={logout}
-            aria-label="تسجيل الخروج"
-            title="تسجيل الخروج"
-            className="w-full text-muted-foreground hover:bg-danger/10 hover:text-danger-soft"
-          >
-            <LogOut aria-hidden />
-          </Button>
-        )}
+        {/* الخروج فعلٌ لا رجعة فيه في جلسة العمل، وكان أيقونةً رمادية بحجم
+            32px بلا تسمية — تُقرأ كزرّ ثانوي أو تُخطَأ بغيرها. صار أحمر
+            صريحاً بتسميته، ويحتفظ بلونه في الحالة المطويّة. */}
+        <Button
+          variant="destructive-soft"
+          size={collapsed ? "icon" : "default"}
+          onClick={logout}
+          aria-label="تسجيل الخروج"
+          title="تسجيل الخروج"
+          className={cn("w-full font-semibold", !collapsed && "justify-start")}
+        >
+          <LogOut aria-hidden />
+          {!collapsed && "تسجيل الخروج"}
+        </Button>
       </div>
     </>
   );
@@ -321,18 +347,13 @@ export function Sidebar() {
           isSidebarCollapsed ? "w-[76px]" : "w-[264px]"
         )}
       >
-        <NavContent navLabel="التنقّل الجانبي" pathname={pathname} collapsed={isSidebarCollapsed} onWarmRoute={warmRoute} />
-
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={toggleSidebar}
-          aria-label={isSidebarCollapsed ? "توسيع الشريط الجانبي" : "طيّ الشريط الجانبي"}
-          title={isSidebarCollapsed ? "توسيع الشريط الجانبي" : "طيّ الشريط الجانبي"}
-          className="absolute top-1/2 -end-3.5 hidden -translate-y-1/2 rounded-full border border-border bg-card text-muted-foreground shadow-elev-2 hover:bg-secondary hover:text-foreground lg:flex"
-        >
-          {isSidebarCollapsed ? <PanelRightClose aria-hidden /> : <PanelRightOpen aria-hidden />}
-        </Button>
+        <NavContent
+          navLabel="التنقّل الجانبي"
+          pathname={pathname}
+          collapsed={isSidebarCollapsed}
+          onWarmRoute={warmRoute}
+          onToggleCollapse={toggleSidebar}
+        />
       </aside>
     </>
   );

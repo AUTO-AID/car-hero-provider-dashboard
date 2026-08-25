@@ -41,21 +41,6 @@ export interface ProviderProfile {
   updatedAt?: string;
 }
 
-export interface AccountProfile {
-  _id?: string;
-  id?: string;
-  phoneNumber?: string;
-  isVerified?: boolean;
-  preferences?: {
-    language?: string;
-    notifications?: {
-      push: boolean;
-      sms: boolean;
-      email: boolean;
-    };
-  };
-}
-
 export interface ServiceCatalogItem {
   id: string;
   name: string;

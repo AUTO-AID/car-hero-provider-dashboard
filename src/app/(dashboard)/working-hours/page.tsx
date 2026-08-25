@@ -57,26 +57,44 @@ function ScheduleEditor({ initialHours, repairedLegacyData }: { initialHours: Ho
   };
 
   return (
-    <div className="max-w-3xl space-y-5 animate-fade-in">
-      <PageToolbar status={`${formatNumber(activeDays)} أيام نشطة من أصل 7`} />
+    // `mx-auto`: كان `max-w-3xl` وحده، والحاوية الأمّ `max-w-[1440px]` أوسع
+    // منه بكثير — فكان الجدول يلتصق بحافّة الصفحة على الشاشات العريضة بدل
+    // أن يتوسّطها، ويبقى نصف العرض فارغاً إلى جانبه.
+    <div className="mx-auto w-full max-w-3xl space-y-6 animate-fade-in">
+      <PageToolbar
+        status={
+          <span className="text-base">
+            <span className="font-bold text-foreground">{formatNumber(activeDays)}</span> أيام عمل من أصل ٧
+          </span>
+        }
+      />
 
       {repairedLegacyData && (
-        <p role="status" className="flex gap-2 rounded-lg border border-warning/25 bg-warning/5 p-3 text-xs leading-relaxed text-warning-soft">
-          <AlertCircle className="size-4 shrink-0" aria-hidden /> بيانات الدوام المحفوظة غير مكتملة. عُرض جدول افتراضي سليم؛ راجعه ثم احفظه لتصحيح السجل.
+        <p role="status" className="flex gap-2.5 rounded-xl border border-warning/25 bg-warning/5 p-4 text-sm leading-relaxed text-warning-soft">
+          <AlertCircle className="mt-0.5 size-5 shrink-0" aria-hidden /> بيانات الدوام المحفوظة غير مكتملة. عُرض جدول افتراضي سليم؛ راجعه ثم احفظه لتصحيح السجل.
         </p>
       )}
 
       <Card className="gap-0">
-        <CardHeader className="flex flex-row items-center justify-between gap-3 border-b pb-4">
-          <CardTitle className="flex items-center gap-2 text-base"><Clock className="size-4 text-primary" aria-hidden /> جدول الأسبوع</CardTitle>
-          <Button type="button" variant="outline" size="sm" onClick={applyToOpenDays}><Copy aria-hidden /> نسخ التوقيت</Button>
+        <CardHeader className="flex flex-col gap-3 border-b pb-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2.5 text-xl font-bold">
+              <Clock className="size-5 text-primary" aria-hidden /> جدول الأسبوع
+            </CardTitle>
+            <p className="mt-1 text-sm text-muted-foreground">
+              أطفئ أي يوم لا تعمل فيه، وحدّد ساعات الفتح والإغلاق لبقيّة الأيام.
+            </p>
+          </div>
+          <Button type="button" variant="outline" onClick={applyToOpenDays} className="shrink-0">
+            <Copy aria-hidden /> نسخ التوقيت لكل الأيام
+          </Button>
         </CardHeader>
-        <CardContent className="space-y-4 p-5 sm:p-6">
+        <CardContent className="space-y-5 p-4 sm:p-6">
           <div className="space-y-3">
             {DAYS.map(({ id, label }) => <DayRow key={id} day={label} config={hours[id]} error={errors[id]} onToggle={() => update(id, { isClosed: !hours[id].isClosed })} onTimeChange={(field, value) => update(id, { [field]: value })} />)}
           </div>
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-border/60 pt-5">
-            <p className="text-xs" aria-live="polite">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border/60 pt-5">
+            <p className="text-sm" aria-live="polite">
               {Object.keys(errors).length ? (
                 <span className="font-semibold text-danger-soft">صحّح الأوقات المعلَّمة قبل الحفظ.</span>
               ) : isDirty ? (
