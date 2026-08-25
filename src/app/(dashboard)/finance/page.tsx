@@ -1,74 +1,77 @@
 "use client";
 
-import { useDeferredValue, useState } from "react";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AxiosError } from "axios";
-import { Clock3, Download, History, Landmark, TrendingUp } from "lucide-react";
-import { toast } from "sonner";
+import { useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { ArrowDownLeft, ArrowUpRight, Receipt, Search, TrendingUp, Wallet, X } from "lucide-react";
 import { providerQueryKeys } from "@/application/services/prefetch";
-import { TransactionFilters } from "@/domain/entities/wallet.types";
-import { exportProviderTransactions, getProviderTransactions, getProviderWallet, requestPayout } from "@/infrastructure/services/wallet.service";
+import type { TransactionFilters } from "@/domain/entities/wallet.types";
+import { getProviderTransactions, getProviderWallet } from "@/infrastructure/services/wallet.service";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataToolbar, type ActiveFilterChip } from "@/components/ui/data-toolbar";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Money } from "@/components/ui/money";
-import { PageToolbar } from "@/components/ui/page-header";
 import { Pagination } from "@/components/ui/pagination";
-import { Select, optionsFromMap } from "@/components/ui/select";
-import { Skeleton, SkeletonList } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
-import { currencyLabel, formatAmount } from "@/lib/format";
-import { BalanceCard } from "./components/balance-card";
-import { FinanceCharts } from "./components/finance-charts";
-import { PayoutDialog } from "./components/payout-dialog";
-import { TxRow } from "./components/tx-row";
+import { dayHeading, groupByDay } from "@/lib/day-groups";
+import { formatNumber } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { EarningsChart } from "./components/earnings-chart";
+import { TransactionRow } from "./components/transaction-row";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 15;
 
-const TYPE_LABELS: Record<string, string> = { credit: "إضافة رصيد", debit: "خصم رصيد", refund: "استرداد" };
-const TX_STATUS_LABELS: Record<string, string> = { completed: "مكتمل", pending: "قيد المراجعة", failed: "مرفوض", reversed: "معكوس" };
-const REFERENCE_LABELS: Record<string, string> = { order: "أرباح الطلبات", payout: "طلبات السحب", withdrawal: "السحوبات", payout_reversal: "إعادة مبلغ سحب" };
-const SORT_LABELS: Record<string, string> = { createdAt: "التاريخ", amount: "المبلغ", status: "الحالة", type: "النوع" };
-const ORDER_LABELS: Record<string, string> = { desc: "تنازلي", asc: "تصاعدي" };
+type MoneyFilter = "all" | "in" | "out";
 
-const TYPE_OPTIONS = optionsFromMap(TYPE_LABELS, "كل أنواع الحركة");
-const TX_STATUS_OPTIONS = optionsFromMap(TX_STATUS_LABELS, "كل الحالات");
-const REFERENCE_OPTIONS = optionsFromMap(REFERENCE_LABELS, "كل المصادر");
-const SORT_OPTIONS = optionsFromMap(SORT_LABELS);
-const ORDER_OPTIONS = optionsFromMap(ORDER_LABELS);
+/**
+ * ثلاث رقاقات بلغة صاحب الورشة: كل شيء، ما دخل، ما خرج.
+ *
+ * حلّت محلّ خمس قوائم منسدلة (نوع الحركة، الحالة، المصدر، الفرز، الاتجاه)
+ * وحقلَي تاريخ. الفلترة على `type` لا على `referenceType` عمداً: الخادم
+ * يطابق `referenceType` بقيمة واحدة، فـ«السحوبات» كانت ستحتاج طلبين
+ * (`payout` و`withdrawal`) — بينما `debit` يجمعهما بدقّة.
+ */
+const FILTERS: Array<{ value: MoneyFilter; label: string; icon: typeof Receipt; type?: string }> = [
+  { value: "all", label: "كل الحركات", icon: Receipt },
+  { value: "in", label: "أرباح دخلت", icon: ArrowDownLeft, type: "credit" },
+  { value: "out", label: "مبالغ خرجت", icon: ArrowUpRight, type: "debit" },
+];
 
-function errorMessage(error: unknown) {
-  const axiosError = error as AxiosError<{ message?: string }>;
-  return axiosError.response?.data?.message || "تعذر تنفيذ العملية. يرجى المحاولة مرة أخرى.";
-}
-
+/**
+ * صفحة الأرباح.
+ *
+ * كانت تفتح على زرّين (تصدير CSV، طلب سحب) وأربع بطاقات بمصطلحات محاسبية
+ * («الرصيد المتاح للسحب»، «الأرباح المثبّتة»، «طلبات السحب المعلّقة»،
+ * «الرصيد المعلّق») ولافتة تحذير، ثمّ مخطّطَي ECharts، ثمّ سبعة عناصر فلترة
+ * فوق سجلّ كل سطر فيه وصفٌ إنجليزي خام:
+ * «Earnings from order #6a3ef9… (15% commission deducted: 15.299999999999999 SAR)».
+ *
+ * البديل يجيب على سؤال واحد بالترتيب: كم عندي؟ كم ربحت؟ ومن أين جاء؟
+ */
 export default function ProviderFinancePage() {
-  const queryClient = useQueryClient();
-  const [isPayoutOpen, setIsPayoutOpen] = useState(false);
-  const [page, setPage] = useState(1);
+  const [filter, setFilter] = useState<MoneyFilter>("all");
   const [search, setSearch] = useState("");
-  const deferredSearch = useDeferredValue(search.trim());
-  const [type, setType] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [referenceType, setReferenceType] = useState("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [sortBy, setSortBy] = useState("createdAt");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(1);
 
-  const filters: TransactionFilters = {
-    page,
-    limit: PAGE_SIZE,
-    search: deferredSearch || undefined,
-    type: type !== "all" ? type : undefined,
-    status: status !== "all" ? status : undefined,
-    referenceType: referenceType !== "all" ? referenceType : undefined,
-    dateFrom: dateFrom || undefined,
-    dateTo: dateTo || undefined,
-    sortBy,
-    sortOrder,
-  };
+  // مُمهَل كما في سجلّ الطلبات: النداء إلى الخادم يكلّف نحو ثانية،
+  // فلا يُطلَق عند كل حرف.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
+  const filters: TransactionFilters = useMemo(
+    () => ({
+      page,
+      limit: PAGE_SIZE,
+      search: debouncedSearch || undefined,
+      type: FILTERS.find((item) => item.value === filter)?.type,
+      sortBy: "createdAt",
+      sortOrder: "desc",
+    }),
+    [debouncedSearch, filter, page]
+  );
 
   const walletQuery = useQuery({ queryKey: providerQueryKeys.wallet, queryFn: getProviderWallet });
   const transactionsQuery = useQuery({
@@ -77,61 +80,27 @@ export default function ProviderFinancePage() {
     placeholderData: keepPreviousData,
   });
 
-  const payoutMutation = useMutation({
-    mutationFn: requestPayout,
-    onSuccess: () => {
-      toast.success("تم إرسال طلب السحب للمراجعة.");
-      setIsPayoutOpen(false);
-      void queryClient.invalidateQueries({ queryKey: providerQueryKeys.wallet });
-      void queryClient.invalidateQueries({ queryKey: providerQueryKeys.transactionsRoot });
-    },
-    onError: (error) => toast.error(errorMessage(error)),
-  });
-
-  const exportMutation = useMutation({
-    mutationFn: () => exportProviderTransactions(filters),
-    onSuccess: () => toast.success("تم تجهيز ملف المعاملات."),
-    onError: (error) => toast.error(errorMessage(error)),
-  });
-
-  const resetFilters = () => {
-    setSearch("");
-    setType("all");
-    setStatus("all");
-    setReferenceType("all");
-    setDateFrom("");
-    setDateTo("");
-    setSortBy("createdAt");
-    setSortOrder("desc");
-    setPage(1);
-  };
-
   const wallet = walletQuery.data;
   const summary = wallet?.summary;
   const currency = wallet?.currency ?? undefined;
-  const transactions = transactionsQuery.data?.data ?? [];
+  const total = transactionsQuery.data?.total;
   const pagination = transactionsQuery.data?.pagination;
 
-  const chips: ActiveFilterChip[] = [
-    search && { key: "search", label: `بحث: ${search}`, onRemove: () => { setSearch(""); setPage(1); } },
-    type !== "all" && { key: "type", label: `الحركة: ${TYPE_LABELS[type]}`, onRemove: () => { setType("all"); setPage(1); } },
-    status !== "all" && { key: "status", label: `الحالة: ${TX_STATUS_LABELS[status]}`, onRemove: () => { setStatus("all"); setPage(1); } },
-    referenceType !== "all" && { key: "referenceType", label: `المصدر: ${REFERENCE_LABELS[referenceType]}`, onRemove: () => { setReferenceType("all"); setPage(1); } },
-    dateFrom && { key: "dateFrom", label: `من: ${dateFrom}`, onRemove: () => { setDateFrom(""); setPage(1); } },
-    dateTo && { key: "dateTo", label: `إلى: ${dateTo}`, onRemove: () => { setDateTo(""); setPage(1); } },
-    sortBy !== "createdAt" && { key: "sortBy", label: `الفرز: ${SORT_LABELS[sortBy]}`, onRemove: () => { setSortBy("createdAt"); setPage(1); } },
-    sortOrder !== "desc" && { key: "sortOrder", label: ORDER_LABELS.asc, onRemove: () => { setSortOrder("desc"); setPage(1); } },
-  ].filter(Boolean) as ActiveFilterChip[];
-  const hasFilters = chips.length > 0;
+  // `?? []` داخل `useMemo` لا خارجه: مصفوفة جديدة في كل تصيير كانت تُبطل
+  // الحفظ وتُعيد التجميع بلا سبب.
+  const transactions = transactionsQuery.data?.data;
+  const sections = useMemo(() => groupByDay(transactions ?? [], (tx) => tx.createdAt), [transactions]);
+  const isFiltered = Boolean(debouncedSearch) || filter !== "all";
 
   if (walletQuery.isLoading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-12 w-64" />
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-28 rounded-xl" />)}
+      <div className="flex flex-col gap-6">
+        <Skeleton className="h-36 rounded-xl" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Skeleton className="h-28 rounded-xl" />
+          <Skeleton className="h-28 rounded-xl" />
         </div>
-        <Skeleton className="h-72 rounded-xl" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     );
   }
@@ -139,8 +108,8 @@ export default function ProviderFinancePage() {
   if (walletQuery.isError || !wallet || !summary) {
     return (
       <ErrorState
-        title="تعذّر تحميل بيانات المحفظة"
-        description="لم يستجب الخادم لطلب رصيد المحفظة وملخّصها المالي."
+        title="تعذّر تحميل بيانات محفظتك"
+        description="لم يستجب الخادم لطلب الرصيد وملخّص الأرباح."
         onRetry={() => void walletQuery.refetch()}
         isRetrying={walletQuery.isFetching}
       />
@@ -148,111 +117,223 @@ export default function ProviderFinancePage() {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
-      <PageToolbar
-        status={
-          wallet.balance < summary.minimumPayout ? (
-            <>
-              يفتح طلب السحب عند بلوغ الرصيد{" "}
-              <Money value={summary.minimumPayout} currency={currency} className="font-semibold text-foreground" />.
-            </>
-          ) : null
-        }
-        actions={
-          <>
-            <Button type="button" variant="outline" onClick={() => exportMutation.mutate()} loading={exportMutation.isPending}>
-              {!exportMutation.isPending && <Download aria-hidden />} تصدير CSV
-            </Button>
-            <Button
-              type="button"
-              onClick={() => setIsPayoutOpen(true)}
-              disabled={wallet.balance < summary.minimumPayout}
-              title={wallet.balance < summary.minimumPayout ? `الرصيد أقل من الحد الأدنى للسحب (${formatAmount(summary.minimumPayout)} ${currencyLabel(currency)})` : undefined}
-            >
-              <Landmark aria-hidden /> طلب سحب
-            </Button>
-          </>
-        }
-      />
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <BalanceCard label="الرصيد المتاح للسحب" value={wallet.balance} currency={currency} tone="primary" />
-        <BalanceCard label="الأرباح المثبّتة" value={summary.totalEarnings} currency={currency} icon={TrendingUp} tone="success" />
-        <BalanceCard label="طلبات السحب المعلّقة" value={summary.pendingPayouts} currency={currency} icon={Clock3} tone="warning" />
-        <BalanceCard label="الرصيد المعلّق" value={wallet.pendingBalance} currency={currency} icon={History} />
-      </div>
-
-      {summary.openingBalance !== 0 && (
-        <Card className="border-warning/25 bg-warning/5">
-          <CardContent className="p-4 text-xs leading-relaxed text-warning-soft">
-            تحتوي المحفظة على رصيد افتتاحي قدره{" "}
-            <Money value={summary.openingBalance} currency={currency} className="font-bold" /> غير مرتبط
-            بمعاملات تاريخية، ولا يُحتسب ضمن الأرباح المثبّتة.
-          </CardContent>
-        </Card>
-      )}
-
-      <FinanceCharts summary={summary} currency={currency} />
-
-      <DataToolbar
-        searchValue={search}
-        onSearchChange={(value) => { setSearch(value); setPage(1); }}
-        searchPlaceholder="ابحث برقم المعاملة أو الوصف أو المرجع"
-        searchLabel="بحث في المعاملات"
-        chips={chips}
-        onReset={resetFilters}
-        resultCount={transactionsQuery.data?.total}
-      >
-        <Select aria-label="نوع الحركة" value={type} onValueChange={(value) => { setType(value); setPage(1); }} options={TYPE_OPTIONS} />
-        <Select aria-label="حالة المعاملة" value={status} onValueChange={(value) => { setStatus(value); setPage(1); }} options={TX_STATUS_OPTIONS} />
-        <Select aria-label="مصدر المعاملة" value={referenceType} onValueChange={(value) => { setReferenceType(value); setPage(1); }} options={REFERENCE_OPTIONS} />
-        <Select aria-label="الفرز حسب" value={sortBy} onValueChange={(value) => { setSortBy(value); setPage(1); }} options={SORT_OPTIONS} />
-        <Select aria-label="اتجاه الفرز" value={sortOrder} onValueChange={(value) => { setSortOrder(value as "asc" | "desc"); setPage(1); }} options={ORDER_OPTIONS} />
-        <div className="col-span-2 flex gap-2 md:col-span-1">
-          <Input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} aria-label="من تاريخ" />
-          <Input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} aria-label="إلى تاريخ" />
-        </div>
-      </DataToolbar>
-
-      <Card className="gap-0">
-        <CardHeader className="border-b bg-secondary/20 pb-4">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <History className="size-4 text-primary" aria-hidden /> سجلّ المعاملات
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {transactionsQuery.isError ? (
-            <ErrorState compact className="m-4" description="تعذّر تحميل سجلّ المعاملات." onRetry={() => void transactionsQuery.refetch()} />
-          ) : transactionsQuery.isLoading ? (
-            <SkeletonList count={5} className="p-4" />
-          ) : transactions.length === 0 ? (
-            <EmptyState
-              icon={History}
-              title={hasFilters ? "لا توجد معاملات مطابقة" : "لا توجد معاملات بعد"}
-              description={hasFilters ? "جرّب توسيع نطاق التاريخ أو إزالة بعض الفلاتر." : "ستظهر هنا كل حركة مالية على محفظتك."}
-              action={hasFilters ? <Button type="button" variant="outline" size="sm" onClick={resetFilters}>مسح الفلاتر</Button> : undefined}
+    <div className="flex flex-col gap-6 animate-fade-in-up">
+      {/* الرقم الوحيد الذي يفتح المزوّد الصفحة لأجله */}
+      <Card className="gap-0 border-primary/25 bg-primary/5 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-muted-foreground">رصيدك الآن</p>
+            <Money
+              value={wallet.balance}
+              currency={currency}
+              className="mt-1 block text-4xl leading-none font-bold text-foreground"
             />
-          ) : (
-            <ul className="divide-y divide-border/60">
-              {transactions.map((transaction) => (
-                <li key={transaction._id}>
-                  <TxRow tx={transaction} currency={currency} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
+          </div>
+          <span
+            aria-hidden
+            className="flex size-14 shrink-0 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary"
+          >
+            <Wallet className="size-7" />
+          </span>
+        </div>
+
+        {/* سطرا التوضيح بلغة عادية. بدونهما يرى المزوّد رصيداً أكبر من أرباحه
+            ولا يجد تفسيراً — وهو أسوأ من مصطلح محاسبي. */}
+        {(wallet.pendingBalance > 0 || summary.openingBalance !== 0) && (
+          <div className="mt-4 flex flex-col gap-1.5 border-t border-primary/15 pt-3 text-xs leading-relaxed text-muted-foreground">
+            {wallet.pendingBalance > 0 && (
+              <p>
+                ويوجد <Money value={wallet.pendingBalance} currency={currency} className="font-bold text-foreground" />{" "}
+                بانتظار تأكيد العملاء، تُضاف إلى رصيدك بعد إغلاق طلباتها.
+              </p>
+            )}
+            {summary.openingBalance !== 0 && (
+              <p>
+                يشمل رصيدك مبلغاً افتتاحياً قدره{" "}
+                <Money value={summary.openingBalance} currency={currency} className="font-bold text-foreground" />{" "}
+                أُضيف عند فتح حسابك، وليس من أرباح طلبات.
+              </p>
+            )}
+          </div>
+        )}
       </Card>
 
-      <Pagination
-        page={pagination?.page ?? 1}
-        pages={pagination?.pages ?? 1}
-        total={transactionsQuery.data?.total}
-        onPageChange={setPage}
-        disabled={transactionsQuery.isFetching}
-      />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <SummaryTile label="أرباح هذا الشهر" value={summary.monthlyEarnings} currency={currency} />
+        <SummaryTile label="إجمالي أرباحك" value={summary.totalEarnings} currency={currency} />
+      </div>
 
-      <PayoutDialog open={isPayoutOpen} onOpenChange={setIsPayoutOpen} balance={wallet.balance} minimumPayout={summary.minimumPayout} currency={currency} onSubmit={(payload) => payoutMutation.mutate(payload)} isPending={payoutMutation.isPending} />
+      <EarningsChart trend={summary.revenueTrend} currency={currency} />
+
+      <Card className="gap-0 p-0">
+        <div className="relative p-4">
+          <Search
+            className="pointer-events-none absolute start-7 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            type="search"
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
+            placeholder="ابحث في حركاتك…"
+            aria-label="بحث في الحركات المالية"
+            className="h-12 rounded-lg ps-12 pe-12 text-base"
+          />
+          {search && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => {
+                setSearch("");
+                setPage(1);
+              }}
+              aria-label="مسح البحث"
+              className="absolute end-7 top-1/2 -translate-y-1/2 text-muted-foreground"
+            >
+              <X aria-hidden />
+            </Button>
+          )}
+        </div>
+
+        <div
+          role="group"
+          aria-label="تصفية الحركات المالية"
+          className="flex gap-2 overflow-x-auto border-t border-border/50 px-4 py-3"
+        >
+          {FILTERS.map((item) => {
+            const active = filter === item.value;
+            return (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() => {
+                  setFilter(item.value);
+                  setPage(1);
+                }}
+                aria-pressed={active}
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors",
+                  "focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+                  active
+                    ? "border-primary bg-primary text-primary-foreground shadow-elev-1"
+                    : "border-border/60 bg-secondary/40 text-muted-foreground hover:border-border hover:text-foreground"
+                )}
+              >
+                <item.icon className="size-4" aria-hidden />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      {transactionsQuery.isError ? (
+        <ErrorState
+          title="تعذّر تحميل سجلّ حركاتك"
+          description="لم يستجب الخادم لطلب قائمة الحركات المالية."
+          onRetry={() => void transactionsQuery.refetch()}
+          isRetrying={transactionsQuery.isFetching}
+        />
+      ) : transactionsQuery.isLoading ? (
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 5 }, (_, index) => (
+            <Skeleton key={index} className="h-[4.75rem] rounded-xl" />
+          ))}
+        </div>
+      ) : sections.length === 0 ? (
+        <Card className="border-dashed">
+          <EmptyState
+            icon={Receipt}
+            title={isFiltered ? "لا توجد حركة مطابقة" : "لا توجد حركات بعد"}
+            description={
+              isFiltered
+                ? "جرّب مسح البحث أو اختيار «كل الحركات»."
+                : "ستظهر هنا كل حركة على رصيدك: أرباح الطلبات والمبالغ المسحوبة."
+            }
+            action={
+              isFiltered ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearch("");
+                    setFilter("all");
+                    setPage(1);
+                  }}
+                >
+                  عرض كل الحركات
+                </Button>
+              ) : undefined
+            }
+          />
+        </Card>
+      ) : (
+        <>
+          <div
+            aria-busy={transactionsQuery.isPlaceholderData}
+            className={cn(
+              "flex flex-col gap-6 transition-opacity duration-150",
+              transactionsQuery.isPlaceholderData && "pointer-events-none opacity-45"
+            )}
+          >
+            {sections.map((section) => {
+              const heading = dayHeading(section.day);
+              return (
+                <section key={section.day.getTime()} className="flex flex-col gap-2">
+                  <div className="flex items-baseline gap-2 px-1">
+                    <h2 className="text-sm font-bold text-foreground">{heading.title}</h2>
+                    {heading.subtitle && (
+                      <span className="text-xs text-muted-foreground">{heading.subtitle}</span>
+                    )}
+                    <span className="ms-auto text-xs text-muted-foreground tabular-nums">
+                      {formatNumber(section.items.length)} حركة
+                    </span>
+                  </div>
+
+                  <ul className="flex flex-col gap-2">
+                    {section.items.map((tx) => (
+                      <TransactionRow key={tx._id} tx={tx} currency={currency} />
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
+          </div>
+
+          <Pagination
+            page={pagination?.page ?? 1}
+            pages={pagination?.pages ?? 1}
+            total={total}
+            onPageChange={setPage}
+            disabled={transactionsQuery.isFetching}
+          />
+        </>
+      )}
     </div>
+  );
+}
+
+function SummaryTile({
+  label,
+  value,
+  currency,
+}: {
+  label: string;
+  value: number;
+  currency?: string;
+}) {
+  return (
+    <Card className="gap-2 p-5">
+      <div className="flex items-center gap-2">
+        <TrendingUp className="size-4 shrink-0 text-success-soft" aria-hidden />
+        <p className="text-sm font-semibold text-muted-foreground">{label}</p>
+      </div>
+      <Money value={value} currency={currency} className="text-2xl font-bold text-foreground" />
+    </Card>
   );
 }
