@@ -2,14 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ArrowDownLeft, ArrowUpRight, Info, PiggyBank, Receipt, Search, TrendingUp, Wallet, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, PiggyBank, Receipt, Search, TrendingUp, Wallet, X } from "lucide-react";
 import { providerQueryKeys } from "@/application/services/prefetch";
 import type { TransactionFilters } from "@/domain/entities/wallet.types";
 import { getProviderTransactions, getProviderWallet } from "@/infrastructure/services/wallet.service";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Money } from "@/components/ui/money";
 import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
@@ -138,33 +137,6 @@ export default function ProviderFinancePage() {
           tone="info"
         />
       </div>
-
-      {/* التوضيحان خارج البطاقات: داخلها كانا يكسران القالب الموحّد، وبدونهما
-          يرى المزوّد رصيداً أكبر من أرباحه بلا تفسير — وذلك أسوأ من مصطلح
-          محاسبي، لا أبسط منه. */}
-      {(wallet.pendingBalance > 0 || summary.openingBalance !== 0) && (
-        <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-secondary/25 p-4 text-sm leading-relaxed text-muted-foreground">
-          {wallet.pendingBalance > 0 && (
-            <p className="flex items-start gap-2">
-              <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground/70" aria-hidden />
-              <span>
-                ويوجد <Money value={wallet.pendingBalance} currency={currency} className="font-bold text-foreground" />{" "}
-                بانتظار تأكيد العملاء، تُضاف إلى رصيدك بعد إغلاق طلباتها.
-              </span>
-            </p>
-          )}
-          {summary.openingBalance !== 0 && (
-            <p className="flex items-start gap-2">
-              <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground/70" aria-hidden />
-              <span>
-                يشمل رصيدك مبلغاً افتتاحياً قدره{" "}
-                <Money value={summary.openingBalance} currency={currency} className="font-bold text-foreground" />{" "}
-                أُضيف عند فتح حسابك، وليس من أرباح طلبات.
-              </span>
-            </p>
-          )}
-        </div>
-      )}
 
       <EarningsChart trend={summary.revenueTrend} currency={currency} />
 
