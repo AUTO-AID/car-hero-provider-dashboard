@@ -62,6 +62,19 @@ export function defaultSortFor(group: OrderGroup): OrderSortKey {
   return group === "scheduled" ? "soonest" : "newest";
 }
 
+/**
+ * الفرز الذي ستطلبه المجموعة فعلاً: الحالي إن كان صالحاً فيها، وإلّا افتراضيّها.
+ *
+ * مشتركة بين النقر والتسخين المسبق عمداً. لو حسب كلٌّ منهما فرزه بنفسه
+ * واختلفا، لاختلف مفتاح الذاكرة عن مفتاح الطلب — فيذهب التسخين هدراً
+ * ويعود انتظار الشبكة كما كان، دون أيّ عطل ظاهر يدلّ على السبب.
+ */
+export function resolveSort(group: OrderGroup, current: OrderSortKey): OrderSortKey {
+  return sortOptionsFor(group).some((option) => option.value === current)
+    ? current
+    : defaultSortFor(group);
+}
+
 /** بداية النطاق بصيغة ISO، أو `undefined` لِـ «كل الأوقات». */
 export function periodStart(period: PeriodKey): string | undefined {
   if (period === "all") return undefined;
@@ -84,6 +97,8 @@ interface OrdersToolbarProps {
   onSortChange: (sort: OrderSortKey) => void;
   summary: OrdersSummary;
   loadingCounts?: boolean;
+  /** يُستدعى عند المرور فوق الرقاقة لجلب مجموعتها قبل النقر */
+  onWarmGroup?: (group: OrderGroup) => void;
 }
 
 export function OrdersToolbar({
@@ -97,6 +112,7 @@ export function OrdersToolbar({
   onSortChange,
   summary,
   loadingCounts,
+  onWarmGroup,
 }: OrdersToolbarProps) {
   return (
     <Card className="gap-0 p-0">
@@ -143,6 +159,8 @@ export function OrdersToolbar({
               key={item.value}
               type="button"
               onClick={() => onGroupChange(item.value)}
+              onMouseEnter={() => onWarmGroup?.(item.value)}
+              onFocus={() => onWarmGroup?.(item.value)}
               aria-pressed={active}
               className={cn(
                 "inline-flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold transition-colors",

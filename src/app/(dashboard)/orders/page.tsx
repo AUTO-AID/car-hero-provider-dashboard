@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
 import { CheckCircle2, ClipboardList, SearchX, Wallet, Wrench } from "lucide-react";
@@ -16,6 +16,7 @@ import {
   type OrderGroup,
   type OrderSortKey,
 } from "@/infrastructure/services/bookings.service";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -31,11 +32,17 @@ import { OrdersList } from "./components/orders-list";
 import {
   GROUPS,
   OrdersToolbar,
-  defaultSortFor,
   periodStart,
-  sortOptionsFor,
+  resolveSort,
   type PeriodKey,
 } from "./components/orders-toolbar";
+
+/**
+ * البيانات المُسخَّنة تُعتبر طازجة خمس دقائق — نفس `staleTime` العام في
+ * `providers.tsx`. الحدث الحقيقي (تغيّر حالة طلب) يصل عبر السوكِت ويُبطل
+ * الجذر كلّه فوراً، فلا حاجة لإعادة جلبٍ دوريّ فوق ذلك.
+ */
+const GROUP_WARM_STALE_TIME = 5 * 60 * 1000;
 
 function getErrorMessage(error: unknown) {
   const axiosError = error as AxiosError<{ message?: string }>;
@@ -68,9 +75,45 @@ export default function ProviderOrdersPage() {
   const [cancelReason, setCancelReason] = useState("");
   const [pendingAction, setPendingAction] = useState<{ id: string; action: string } | null>(null);
 
-  const deferredSearch = useDeferredValue(search.trim());
+  /**
+   * البحث مُمهَل ٣٥٠ms.
+   *
+   * `useDeferredValue` كان يؤجّل **التصيير** لا الشبكة: كل توقّف قصير أثناء
+   * الكتابة كان يُطلق نداءً كاملاً إلى خادمٍ يبعد ٦٠٠ms في أحسن حال، فتتكدّس
+   * أربعة أو خمسة نداءات لكلمة واحدة ويصل آخرها بعد أن تكون العين انتقلت.
+   */
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
   const dateFrom = periodStart(period);
-  const scope = { search: deferredSearch || undefined, dateFrom };
+  const scope = useMemo(
+    () => ({ search: debouncedSearch || undefined, dateFrom }),
+    [debouncedSearch, dateFrom]
+  );
+
+  /**
+   * الفرز الذي ستطلبه المجموعة فعلاً لو نُقرت الآن. تُستعمل في مكانين —
+   * عند النقر وعند التسخين المسبق — ولو اختلفا لاختلف مفتاح الذاكرة عن
+   * مفتاح الطلب، فيذهب التسخين هدراً ويعود الانتظار كما كان.
+   */
+  const sortForGroup = useCallback(
+    (target: OrderGroup) => resolveSort(target, sort),
+    [sort]
+  );
+
+  const queryForGroup = useCallback(
+    (target: OrderGroup) => ({
+      ...scope,
+      group: target,
+      sort: sortForGroup(target),
+      page: 1,
+      limit: ORDERS_PAGE_SIZE,
+    }),
+    [scope, sortForGroup]
+  );
 
   const ordersQuery = useQuery({
     queryKey: providerQueryKeys.orders({ ...scope, group, sort, page, limit: ORDERS_PAGE_SIZE }),
@@ -99,6 +142,61 @@ export default function ProviderOrdersPage() {
     queryKey: providerQueryKeys.orders({ group: "active", page: 1, limit: 50 }),
     queryFn: () => getProviderOrders({ group: "active", page: 1, limit: 50 }),
   });
+
+  /**
+   * تسخين المجموعات: نقرة الرقاقة يجب أن تقرأ من الذاكرة لا من الشبكة.
+   *
+   * كل مجموعة استعلامٌ مستقلّ، فكانت كل نقرة تدفع دورة كاملة إلى Render
+   * (٦٠٠ms–١s مقيسة، وأكثر مع تجميعة `$facet`) والقائمة تبقى على محتواها
+   * القديم بلا إشارة — فتبدو الرقاقة كأنها لم تعمل. الآن تُجلب المجموعات
+   * الأربع الأخرى في وقت الفراغ، ويُسخَّن ما تمرّ فوقه فوراً، فتصل النقرة
+   * إلى بيانات جاهزة.
+   */
+  const warmGroup = useCallback(
+    (target: OrderGroup) => {
+      const query = queryForGroup(target);
+      void queryClient.prefetchQuery({
+        queryKey: providerQueryKeys.orders(query),
+        queryFn: () => getProviderOrders(query),
+        staleTime: GROUP_WARM_STALE_TIME,
+      });
+    },
+    [queryClient, queryForGroup]
+  );
+
+  useEffect(() => {
+    // لا تسخين شامل أثناء البحث: كل مصطلح مستقرّ كان سيُطلق خمسة نداءات
+    // إضافية على خادمٍ مجّاني، والباحث يبقى عادةً داخل مجموعة واحدة.
+    // التسخين عند المرور فوق الرقاقة يغطّي هذه الحالة بنداء واحد عند الحاجة.
+    if (debouncedSearch) return undefined;
+
+    // في وقت الفراغ لا فوراً: التحميل الأوّل يحتاج نطاقه للقائمة والملخّص
+    // والطلبات النشطة، وإقحام أربعة نداءات فوقها يؤخّر ما يُنتظر فعلاً.
+    const warmAll = () => GROUPS.forEach((item) => warmGroup(item.value));
+
+    if (typeof window.requestIdleCallback === "function") {
+      const id = window.requestIdleCallback(warmAll, { timeout: 2500 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const id = window.setTimeout(warmAll, 800);
+    return () => window.clearTimeout(id);
+  }, [debouncedSearch, warmGroup]);
+
+  /**
+   * الصفحة التالية تُجلب فور استقرار الحالية، فزرّ «التالي» يعمل من الذاكرة.
+   * هو النداء نفسه الذي كان سيحدث بعد النقر — لكنه يقع في وقت لا ينتظر فيه
+   * أحد.
+   */
+  const totalPages = ordersQuery.data?.pagination?.pages ?? 1;
+  useEffect(() => {
+    if (ordersQuery.isPlaceholderData || page >= totalPages) return;
+    const next = { ...scope, group, sort, page: page + 1, limit: ORDERS_PAGE_SIZE };
+    void queryClient.prefetchQuery({
+      queryKey: providerQueryKeys.orders(next),
+      queryFn: () => getProviderOrders(next),
+      staleTime: GROUP_WARM_STALE_TIME,
+    });
+  }, [group, ordersQuery.isPlaceholderData, page, queryClient, scope, sort, totalPages]);
 
   const summary = summaryQuery.data ?? EMPTY_ORDERS_SUMMARY;
   const orders = ordersQuery.data?.data ?? [];
@@ -139,8 +237,7 @@ export default function ProviderOrdersPage() {
     setPage(1);
     // مفاتيح الفرز ليست واحدة في كل المجموعات: «الموعد الأقرب» لا معنى له
     // خارج المواعيد، و«الأحدث» لا معنى له داخلها.
-    const allowed = sortOptionsFor(nextGroup).map((option) => option.value);
-    if (!allowed.includes(sort)) setSort(defaultSortFor(nextGroup));
+    setSort(sortForGroup(nextGroup));
   };
 
   const runStatusAction = (order: Booking, actionKey: string, nextStatus: string) => {
@@ -173,7 +270,7 @@ export default function ProviderOrdersPage() {
     setPage(1);
   };
 
-  const isFiltered = Boolean(deferredSearch) || period !== "all" || group !== "all";
+  const isFiltered = Boolean(debouncedSearch) || period !== "all" || group !== "all";
   const groupLabel = useMemo(
     () => GROUPS.find((item) => item.value === group)?.label ?? "الطلبات",
     [group]
@@ -235,6 +332,7 @@ export default function ProviderOrdersPage() {
         }}
         summary={summary}
         loadingCounts={summaryQuery.isLoading}
+        onWarmGroup={warmGroup}
       />
 
       {ordersQuery.isError ? (
@@ -271,7 +369,16 @@ export default function ProviderOrdersPage() {
         </Card>
       ) : (
         <>
-          <div aria-busy={ordersQuery.isFetching}>
+          {/* الإشارة تظهر فقط حين تكون الصفوف المعروضة تخصّ فلتراً آخر
+              (`isPlaceholderData`) — لا عند كل إعادة جلب في الخلفية، وإلا
+              وميض المحتوى بعد كل حدث سوكِت بلا سبب مرئي. */}
+          <div
+            aria-busy={ordersQuery.isPlaceholderData}
+            className={cn(
+              "transition-opacity duration-150",
+              ordersQuery.isPlaceholderData && "pointer-events-none opacity-45"
+            )}
+          >
             <OrdersList
               orders={orders}
               onOpen={setSelectedOrderId}
