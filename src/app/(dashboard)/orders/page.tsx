@@ -28,13 +28,8 @@ import { EmptyState, ErrorState } from "@/components/ui/states";
 import { Textarea } from "@/components/ui/textarea";
 import { OrderDetailsDialog } from "./components/order-details-dialog";
 import { OrdersList } from "./components/orders-list";
-import {
-  GROUPS,
-  OrdersToolbar,
-  periodStart,
-  resolveSort,
-  type PeriodKey,
-} from "./components/orders-toolbar";
+import { periodStart, type PeriodKey } from "@/lib/date-periods";
+import { GROUPS, OrdersToolbar, resolveSort } from "./components/orders-toolbar";
 
 /**
  * البيانات المُسخَّنة تُعتبر طازجة خمس دقائق — نفس `staleTime` العام في

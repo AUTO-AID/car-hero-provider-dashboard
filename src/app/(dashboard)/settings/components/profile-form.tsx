@@ -13,11 +13,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { updateProviderLocation, updateProviderProfile } from "@/infrastructure/services/profile.service";
 import { LocationPicker, type LatLng } from "./location-picker";
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 interface ProfileData {
   businessName: string;
   ownerName: string;
+  /**
+   * لا يُعرض ولا يُحرَّر — حقل البريد حُذف من الواجهة. تُعاد القيمة المحفوظة
+   * كما هي في كل حفظ حتى لا يمحوها التحديث، ولا تُتحقَّق منها: بريدٌ قديم
+   * غير صالح كان سيُقفل زرّ الحفظ إلى الأبد بلا حقل يصحّحه.
+   */
   email: string;
   address: string;
   city: string;
@@ -59,13 +62,11 @@ export function ProfileForm({
     businessName: normalized.businessName.length > 0 && normalized.businessName.length < 2 ? "حرفان على الأقل." : undefined,
     ownerName: normalized.ownerName.length > 0 && normalized.ownerName.length < 2 ? "حرفان على الأقل." : undefined,
     city: normalized.city.length > 0 && normalized.city.length < 2 ? "حرفان على الأقل." : undefined,
-    email: normalized.email && !EMAIL_PATTERN.test(normalized.email) ? "صيغة البريد الإلكتروني غير صحيحة." : undefined,
   };
   const isValid =
     normalized.businessName.length >= 2 &&
     normalized.ownerName.length >= 2 &&
-    normalized.city.length >= 2 &&
-    !errors.email;
+    normalized.city.length >= 2;
 
   const mutation = useMutation({
     mutationFn: async (data: ProfileData) => {
@@ -233,18 +234,6 @@ export function ProfileForm({
             </div>
           )}
         </div>
-
-        <Field label="البريد الإلكتروني" hint="اختياري — للتقارير والإشعارات." error={errors.email}>
-          <Input
-            type="email"
-            dir="ltr"
-            autoComplete="email"
-            value={formData.email}
-            onChange={(event) => update("email", event.target.value)}
-            maxLength={160}
-            className="h-11"
-          />
-        </Field>
       </Section>
 
       {/* شريط الحفظ ملتصق بأسفل الشاشة: النموذج أطول من الطية، وزرّ الحفظ

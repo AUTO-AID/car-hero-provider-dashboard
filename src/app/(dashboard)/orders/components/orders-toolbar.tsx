@@ -6,10 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, type SelectOption } from "@/components/ui/select";
+import { PERIODS, type PeriodKey } from "@/lib/date-periods";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
-
-export type PeriodKey = "all" | "today" | "7d" | "30d" | "12m";
 
 interface GroupDef {
   value: OrderGroup;
@@ -30,13 +29,7 @@ export const GROUPS: GroupDef[] = [
   { value: "cancelled", label: "ملغاة", icon: XCircle, count: (s) => s.cancelled },
 ];
 
-const PERIOD_OPTIONS: SelectOption[] = [
-  { value: "all", label: "كل الأوقات" },
-  { value: "today", label: "اليوم" },
-  { value: "7d", label: "آخر ٧ أيام" },
-  { value: "30d", label: "آخر ٣٠ يوماً" },
-  { value: "12m", label: "آخر سنة" },
-];
+const PERIOD_OPTIONS: SelectOption[] = PERIODS;
 
 const SORT_BY_DATE: SelectOption[] = [
   { value: "newest", label: "الأحدث أولاً" },
@@ -53,6 +46,8 @@ const SORT_BY_SCHEDULE: SelectOption[] = [
   { value: "latest", label: "الموعد الأبعد أولاً" },
   { value: "amount", label: "الأعلى مبلغاً" },
 ];
+
+export type { PeriodKey };
 
 export function sortOptionsFor(group: OrderGroup) {
   return group === "scheduled" ? SORT_BY_SCHEDULE : SORT_BY_DATE;
@@ -73,17 +68,6 @@ export function resolveSort(group: OrderGroup, current: OrderSortKey): OrderSort
   return sortOptionsFor(group).some((option) => option.value === current)
     ? current
     : defaultSortFor(group);
-}
-
-/** بداية النطاق بصيغة ISO، أو `undefined` لِـ «كل الأوقات». */
-export function periodStart(period: PeriodKey): string | undefined {
-  if (period === "all") return undefined;
-  const date = new Date();
-  date.setHours(0, 0, 0, 0);
-  if (period === "7d") date.setDate(date.getDate() - 6);
-  if (period === "30d") date.setDate(date.getDate() - 29);
-  if (period === "12m") date.setFullYear(date.getFullYear() - 1);
-  return date.toISOString();
 }
 
 interface OrdersToolbarProps {

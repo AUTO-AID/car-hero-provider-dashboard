@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ArrowDownLeft, ArrowUpRight, PiggyBank, Receipt, Search, TrendingUp, Wallet, X } from "lucide-react";
+import { PiggyBank, Receipt, Search, TrendingUp, Wallet, X } from "lucide-react";
 import { providerQueryKeys } from "@/application/services/prefetch";
 import type { TransactionFilters } from "@/domain/entities/wallet.types";
 import { getProviderTransactions, getProviderWallet } from "@/infrastructure/services/wallet.service";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Pagination } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/ui/states";
+import { PERIODS, periodStart, type PeriodKey } from "@/lib/date-periods";
 import { dayHeading, groupByDay } from "@/lib/day-groups";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -20,22 +21,6 @@ import { MoneyTile } from "./components/money-tile";
 import { TransactionRow } from "./components/transaction-row";
 
 const PAGE_SIZE = 15;
-
-type MoneyFilter = "all" | "in" | "out";
-
-/**
- * ثلاث رقاقات بلغة صاحب الورشة: كل شيء، ما دخل، ما خرج.
- *
- * حلّت محلّ خمس قوائم منسدلة (نوع الحركة، الحالة، المصدر، الفرز، الاتجاه)
- * وحقلَي تاريخ. الفلترة على `type` لا على `referenceType` عمداً: الخادم
- * يطابق `referenceType` بقيمة واحدة، فـ«السحوبات» كانت ستحتاج طلبين
- * (`payout` و`withdrawal`) — بينما `debit` يجمعهما بدقّة.
- */
-const FILTERS: Array<{ value: MoneyFilter; label: string; icon: typeof Receipt; type?: string }> = [
-  { value: "all", label: "كل الحركات", icon: Receipt },
-  { value: "in", label: "أرباح دخلت", icon: ArrowDownLeft, type: "credit" },
-  { value: "out", label: "مبالغ خرجت", icon: ArrowUpRight, type: "debit" },
-];
 
 /**
  * صفحة الأرباح.
@@ -49,7 +34,7 @@ const FILTERS: Array<{ value: MoneyFilter; label: string; icon: typeof Receipt; 
  * البديل يجيب على سؤال واحد بالترتيب: كم عندي؟ كم ربحت؟ ومن أين جاء؟
  */
 export default function ProviderFinancePage() {
-  const [filter, setFilter] = useState<MoneyFilter>("all");
+  const [period, setPeriod] = useState<PeriodKey>("all");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
@@ -66,11 +51,11 @@ export default function ProviderFinancePage() {
       page,
       limit: PAGE_SIZE,
       search: debouncedSearch || undefined,
-      type: FILTERS.find((item) => item.value === filter)?.type,
+      dateFrom: periodStart(period),
       sortBy: "createdAt",
       sortOrder: "desc",
     }),
-    [debouncedSearch, filter, page]
+    [debouncedSearch, page, period]
   );
 
   const walletQuery = useQuery({ queryKey: providerQueryKeys.wallet, queryFn: getProviderWallet });
@@ -90,7 +75,7 @@ export default function ProviderFinancePage() {
   // الحفظ وتُعيد التجميع بلا سبب.
   const transactions = transactionsQuery.data?.data;
   const sections = useMemo(() => groupByDay(transactions ?? [], (tx) => tx.createdAt), [transactions]);
-  const isFiltered = Boolean(debouncedSearch) || filter !== "all";
+  const isFiltered = Boolean(debouncedSearch) || period !== "all";
 
   if (walletQuery.isLoading) {
     return (
@@ -174,19 +159,23 @@ export default function ProviderFinancePage() {
           )}
         </div>
 
+        {/* فلتر واحد: الفترة. كانت ثلاث رقاقات «كل الحركات / أرباح دخلت /
+            مبالغ خرجت» تقسم السجلّ بمعيار لا وجود له عملياً — كل حركات
+            المزوّد أرباح طلبات، فرقاقة «مبالغ خرجت» تعطي قائمة فارغة دائماً
+            وتوحي بأن شيئاً ينقص. */}
         <div
           role="group"
-          aria-label="تصفية الحركات المالية"
+          aria-label="تصفية حسب الفترة"
           className="flex gap-2 overflow-x-auto border-t border-border/50 px-4 py-3"
         >
-          {FILTERS.map((item) => {
-            const active = filter === item.value;
+          {PERIODS.map((item) => {
+            const active = period === item.value;
             return (
               <button
                 key={item.value}
                 type="button"
                 onClick={() => {
-                  setFilter(item.value);
+                  setPeriod(item.value);
                   setPage(1);
                 }}
                 aria-pressed={active}
@@ -198,7 +187,6 @@ export default function ProviderFinancePage() {
                     : "border-border/60 bg-secondary/40 text-muted-foreground hover:border-border hover:text-foreground"
                 )}
               >
-                <item.icon className="size-4" aria-hidden />
                 {item.label}
               </button>
             );
@@ -226,7 +214,7 @@ export default function ProviderFinancePage() {
             title={isFiltered ? "لا توجد حركة مطابقة" : "لا توجد حركات بعد"}
             description={
               isFiltered
-                ? "جرّب مسح البحث أو اختيار «كل الحركات»."
+                ? "جرّب مسح البحث أو اختيار «كل الأوقات»."
                 : "ستظهر هنا كل حركة على رصيدك: أرباح الطلبات والمبالغ المسحوبة."
             }
             action={
@@ -237,7 +225,7 @@ export default function ProviderFinancePage() {
                   size="sm"
                   onClick={() => {
                     setSearch("");
-                    setFilter("all");
+                    setPeriod("all");
                     setPage(1);
                   }}
                 >
