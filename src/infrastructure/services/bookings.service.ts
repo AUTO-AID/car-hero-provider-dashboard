@@ -151,22 +151,6 @@ export const getBookingDetails = (bookingId: string) =>
 export const updateBookingStatus = (bookingId: string, status: string) =>
   api.patch(`/orders/${bookingId}/status`, { status }).then((response) => unwrapApiData(response.data));
 
-/**
- * دفع موقع الفني الحالي إلى الطلب النشط.
- *
- * الخلفية كانت جاهزة لهذا منذ البداية (PATCH /orders/:id/location يحفظ
- * providerLocation وسجلّ المسار ويبثّه على غرفة الطلب)، لكن لم يكن في لوحة
- * المزوّد أي مُرسِل — فبقيت المسافة والوقت المتوقّع في تطبيق العميل
- * «غير متاحة» دائماً. هذه هي النقطة التي تُغذّي التتبّع كلّه.
- *
- * الإحداثيات بترتيب GeoJSON: [longitude, latitude].
- */
-export const updateBookingLocation = (
-  bookingId: string,
-  payload: { coordinates: [number, number]; accuracy?: number; heading?: number; speed?: number },
-) =>
-  api.patch(`/orders/${bookingId}/location`, payload).then((response) => unwrapApiData(response.data));
-
 export const cancelBooking = (bookingId: string, reason: string) =>
   api.post(`/orders/${bookingId}/cancel`, { reason, cancelledBy: "provider" }).then((response) => unwrapApiData(response.data));
 

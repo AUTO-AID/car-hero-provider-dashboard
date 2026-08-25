@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { ArrowDownLeft, ArrowUpRight, Receipt, Search, TrendingUp, Wallet, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Info, PiggyBank, Receipt, Search, TrendingUp, Wallet, X } from "lucide-react";
 import { providerQueryKeys } from "@/application/services/prefetch";
 import type { TransactionFilters } from "@/domain/entities/wallet.types";
 import { getProviderTransactions, getProviderWallet } from "@/infrastructure/services/wallet.service";
@@ -17,6 +17,7 @@ import { dayHeading, groupByDay } from "@/lib/day-groups";
 import { formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { EarningsChart } from "./components/earnings-chart";
+import { MoneyTile } from "./components/money-tile";
 import { TransactionRow } from "./components/transaction-row";
 
 const PAGE_SIZE = 15;
@@ -118,50 +119,52 @@ export default function ProviderFinancePage() {
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in-up">
-      {/* الرقم الوحيد الذي يفتح المزوّد الصفحة لأجله */}
-      <Card className="gap-0 border-primary/25 bg-primary/5 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold text-muted-foreground">رصيدك الآن</p>
-            <Money
-              value={wallet.balance}
-              currency={currency}
-              className="mt-1 block text-4xl leading-none font-bold text-foreground"
-            />
-          </div>
-          <span
-            aria-hidden
-            className="flex size-14 shrink-0 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary"
-          >
-            <Wallet className="size-7" />
-          </span>
-        </div>
+      {/* ثلاثة أرقام من النوع نفسه ⇒ ثلاث بطاقات بقالب واحد في صفّ واحد.
+          الفرق الوحيد بينها نغمة الأيقونة، فتُقرأ كمجموعة قابلة للمقارنة. */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <MoneyTile label="رصيدك الآن" value={wallet.balance} currency={currency} icon={Wallet} tone="primary" />
+        <MoneyTile
+          label="أرباح هذا الشهر"
+          value={summary.monthlyEarnings}
+          currency={currency}
+          icon={TrendingUp}
+          tone="success"
+        />
+        <MoneyTile
+          label="إجمالي أرباحك"
+          value={summary.totalEarnings}
+          currency={currency}
+          icon={PiggyBank}
+          tone="info"
+        />
+      </div>
 
-        {/* سطرا التوضيح بلغة عادية. بدونهما يرى المزوّد رصيداً أكبر من أرباحه
-            ولا يجد تفسيراً — وهو أسوأ من مصطلح محاسبي. */}
-        {(wallet.pendingBalance > 0 || summary.openingBalance !== 0) && (
-          <div className="mt-4 flex flex-col gap-1.5 border-t border-primary/15 pt-3 text-xs leading-relaxed text-muted-foreground">
-            {wallet.pendingBalance > 0 && (
-              <p>
+      {/* التوضيحان خارج البطاقات: داخلها كانا يكسران القالب الموحّد، وبدونهما
+          يرى المزوّد رصيداً أكبر من أرباحه بلا تفسير — وذلك أسوأ من مصطلح
+          محاسبي، لا أبسط منه. */}
+      {(wallet.pendingBalance > 0 || summary.openingBalance !== 0) && (
+        <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-secondary/25 p-4 text-sm leading-relaxed text-muted-foreground">
+          {wallet.pendingBalance > 0 && (
+            <p className="flex items-start gap-2">
+              <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground/70" aria-hidden />
+              <span>
                 ويوجد <Money value={wallet.pendingBalance} currency={currency} className="font-bold text-foreground" />{" "}
                 بانتظار تأكيد العملاء، تُضاف إلى رصيدك بعد إغلاق طلباتها.
-              </p>
-            )}
-            {summary.openingBalance !== 0 && (
-              <p>
+              </span>
+            </p>
+          )}
+          {summary.openingBalance !== 0 && (
+            <p className="flex items-start gap-2">
+              <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground/70" aria-hidden />
+              <span>
                 يشمل رصيدك مبلغاً افتتاحياً قدره{" "}
                 <Money value={summary.openingBalance} currency={currency} className="font-bold text-foreground" />{" "}
                 أُضيف عند فتح حسابك، وليس من أرباح طلبات.
-              </p>
-            )}
-          </div>
-        )}
-      </Card>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <SummaryTile label="أرباح هذا الشهر" value={summary.monthlyEarnings} currency={currency} />
-        <SummaryTile label="إجمالي أرباحك" value={summary.totalEarnings} currency={currency} />
-      </div>
+              </span>
+            </p>
+          )}
+        </div>
+      )}
 
       <EarningsChart trend={summary.revenueTrend} currency={currency} />
 
@@ -315,25 +318,5 @@ export default function ProviderFinancePage() {
         </>
       )}
     </div>
-  );
-}
-
-function SummaryTile({
-  label,
-  value,
-  currency,
-}: {
-  label: string;
-  value: number;
-  currency?: string;
-}) {
-  return (
-    <Card className="gap-2 p-5">
-      <div className="flex items-center gap-2">
-        <TrendingUp className="size-4 shrink-0 text-success-soft" aria-hidden />
-        <p className="text-sm font-semibold text-muted-foreground">{label}</p>
-      </div>
-      <Money value={value} currency={currency} className="text-2xl font-bold text-foreground" />
-    </Card>
   );
 }

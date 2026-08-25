@@ -26,7 +26,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { StatCard } from "@/components/ui/stat-card";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { Textarea } from "@/components/ui/textarea";
-import { LocationBroadcastCard } from "./components/location-broadcast-card";
 import { OrderDetailsDialog } from "./components/order-details-dialog";
 import { OrdersList } from "./components/orders-list";
 import {
@@ -127,20 +126,6 @@ export default function ProviderOrdersPage() {
     queryKey: providerQueryKeys.ordersSummary(scope),
     queryFn: () => getProviderOrdersSummary(scope),
     placeholderData: keepPreviousData,
-  });
-
-  /**
-   * الطلبات النشطة تُطلب على حدة لا تُقرأ من القائمة المعروضة.
-   *
-   * بثّ الموقع كان يتغذّى من `bookings` الصفحة، وذلك مقبول حين كان العرض
-   * الافتراضي هو «الطلبات الحالية» وحدها. مع سجلٍّ يبدأ بـ«كل الطلبات»
-   * ويُفلتَر بحرّية، كان فلترُ المزوّد إلى «مكتملة» — أو تصفّحه إلى الصفحة
-   * الثانية — يُطفئ البثّ في منتصف مهمّة جارية بلا أيّ أثر مرئي، فيتجمّد
-   * موقع الفنّي على خريطة العميل.
-   */
-  const activeOrdersQuery = useQuery({
-    queryKey: providerQueryKeys.orders({ group: "active", page: 1, limit: 50 }),
-    queryFn: () => getProviderOrders({ group: "active", page: 1, limit: 50 }),
   });
 
   /**
@@ -308,9 +293,6 @@ export default function ProviderOrdersPage() {
           loading={summaryQuery.isLoading}
         />
       </div>
-
-      {/* بثّ الموقع: يظهر فقط حين توجد طلبات نشطة تستقبله */}
-      <LocationBroadcastCard bookings={activeOrdersQuery.data?.data ?? []} />
 
       <OrdersToolbar
         search={search}

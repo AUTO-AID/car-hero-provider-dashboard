@@ -15,7 +15,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { NAV_GROUPS, isRouteActive, routeByHref } from "@/lib/routes";
 import { cn } from "@/lib/utils";
-import { AvailabilityToggle } from "./availability-toggle";
 
 /**
  * مؤشّر الاتصال — يعكس حالة السوكِت الفعلية.
@@ -161,8 +160,6 @@ function NavContent({
       </nav>
 
       <div className="shrink-0 space-y-2 border-t border-border/60 p-2">
-        <AvailabilityToggle collapsed={collapsed} />
-
         <div
           className={cn(
             "flex items-center gap-2 rounded-lg border border-border bg-secondary/30 p-2",

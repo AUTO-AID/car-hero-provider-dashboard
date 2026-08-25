@@ -9,16 +9,6 @@ export const updateProviderProfile = <T extends object>(data: T) =>
   api.put("/providers/me", data).then((res) => unwrapApiData<ProviderProfile>(res.data));
 
 /**
- * حالة التوفّر التي يراها العملاء.
- * `GET /providers/nearby` لا يُرجع إلا المزوّدين بحالة `online`، أي أن هذه
- * القيمة تحدّد ظهور النشاط في التطبيق — ولم يكن في اللوحة أي وسيلة لتغييرها.
- */
-export type ProviderAvailability = "online" | "busy" | "offline";
-
-export const updateProviderStatus = (status: ProviderAvailability) =>
-  api.put("/providers/me/status", { status }).then((res) => unwrapApiData<ProviderProfile>(res.data));
-
-/**
  * موقع النشاط على الخريطة.
  *
  * `PUT /providers/me/location` كان جاهزاً في الخلفية منذ البداية (يتحقّق من
