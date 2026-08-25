@@ -1,162 +1,122 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState, type ReactNode } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
-import { CalendarClock, CheckCircle2, ClipboardList, History, XCircle } from "lucide-react";
+import { CheckCircle2, ClipboardList, SearchX, Wallet, Wrench } from "lucide-react";
 import { toast } from "sonner";
-import { providerQueryKeys } from "@/application/services/prefetch";
-import { Booking } from "@/domain/entities/booking.types";
+import { ORDERS_PAGE_SIZE, providerQueryKeys } from "@/application/services/prefetch";
+import type { Booking } from "@/domain/entities/booking.types";
 import {
-  BookingFilters,
-  BookingView,
+  EMPTY_ORDERS_SUMMARY,
   cancelBooking,
-  getBookingDetails,
-  getProviderBookings,
-  getProviderWeeklyActivity,
+  getProviderOrders,
+  getProviderOrdersSummary,
   updateBookingStatus,
+  type OrderGroup,
+  type OrderSortKey,
 } from "@/infrastructure/services/bookings.service";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { StatCard } from "@/components/ui/stat-card";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { DataToolbar, type ActiveFilterChip } from "@/components/ui/data-toolbar";
-import { Input } from "@/components/ui/input";
-import { Money, RelativeTime } from "@/components/ui/money";
+import { Money } from "@/components/ui/money";
 import { Pagination } from "@/components/ui/pagination";
-import { Select, optionsFromMap } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatCard } from "@/components/ui/stat-card";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { Textarea } from "@/components/ui/textarea";
-import { formatDateTime, formatWeekdayShort } from "@/lib/format";
-import { BookingCard } from "./components/booking-card";
 import { LocationBroadcastCard } from "./components/location-broadcast-card";
-import { StatusBadge, STATUS_MAP } from "./components/status-badge";
-import { TabButton } from "./components/tab-button";
-import { WeeklyPerformanceChart } from "./components/weekly-performance-chart";
-
-const PAGE_SIZE = 9;
-const TABS: Array<{ value: Exclude<BookingView, "all">; label: string }> = [
-  { value: "current", label: "الطلبات الحالية" },
-  { value: "appointments", label: "المواعيد" },
-  { value: "history", label: "السجل التاريخي" },
-];
-
-const PAYMENT_STATUS_LABELS: Record<string, string> = {
-  pending: "بانتظار الدفع",
-  completed: "مدفوع",
-  failed: "فشل الدفع",
-  refunded: "مسترد",
-};
-
-/** الطرق الفعّالة — وهي وحدها ما يظهر في الفلتر */
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: "نقدي",
-  points: "نقاط الولاء",
-  cham_cash: "شام كاش",
-};
-
-/**
- * تسميات القراءة تشمل المتقاعد أيضاً: طلبات قديمة تحمل `wallet` و`card`،
- * وعرضها بقيمتها الخام في جدول عربي يبدو كعطل.
- */
-const PAYMENT_METHOD_READ_LABELS: Record<string, string> = {
-  ...PAYMENT_METHOD_LABELS,
-  wallet: "المحفظة (متقاعد)",
-  card: "بطاقة (متقاعد)",
-  online: "دفع إلكتروني (متقاعد)",
-};
-
-const SORT_LABELS: Record<string, string> = {
-  createdAt: "تاريخ الإنشاء",
-  scheduledAt: "الموعد",
-  amount: "المبلغ",
-  status: "الحالة",
-};
-
-const ORDER_LABELS: Record<string, string> = {
-  desc: "الأحدث أولاً",
-  asc: "الأقدم أولاً",
-};
-
-const STATUS_OPTIONS = optionsFromMap(
-  Object.fromEntries(Object.entries(STATUS_MAP).map(([value, config]) => [value, config.label])),
-  "كل الحالات"
-);
-const PAYMENT_STATUS_OPTIONS = optionsFromMap(PAYMENT_STATUS_LABELS, "كل حالات الدفع");
-const PAYMENT_METHOD_OPTIONS = optionsFromMap(PAYMENT_METHOD_LABELS, "كل طرق الدفع");
-const SORT_OPTIONS = optionsFromMap(SORT_LABELS);
-const ORDER_OPTIONS = optionsFromMap(ORDER_LABELS);
+import { OrderDetailsDialog } from "./components/order-details-dialog";
+import { OrdersList } from "./components/orders-list";
+import {
+  GROUPS,
+  OrdersToolbar,
+  defaultSortFor,
+  periodStart,
+  sortOptionsFor,
+  type PeriodKey,
+} from "./components/orders-toolbar";
 
 function getErrorMessage(error: unknown) {
   const axiosError = error as AxiosError<{ message?: string }>;
   return axiosError.response?.data?.message || "تعذر تنفيذ العملية. يرجى المحاولة مرة أخرى.";
 }
 
-
-
+/**
+ * سجلّ الطلبات والمواعيد.
+ *
+ * الشاشة السابقة كانت تسأل المزوّد سبعة أسئلة قبل أن تريه طلباً واحداً:
+ * أيّ عرض من ثلاثة، وأيّ حالة من تسع، وأيّ حالة دفع، وأيّ وسيلة دفع،
+ * وبأيّ حقل يُفرز، وبأيّ اتجاه، وبين أيّ تاريخين — فوق مخطّط أعمدة أسبوعي
+ * يكرّر ما في لوحة القيادة. وجمهورها ورشات لا مشغّلو أنظمة.
+ *
+ * البديل: **سجلّ يُقرأ من أعلى إلى أسفل**. رقاقة واحدة تختار المجموعة،
+ * وحقل بحث واحد، وفترة، وترتيب. الطلبات مصفوفة بأيّامها كما يُقلَّب دفتر،
+ * والنقر على أيّ طلب يفتح كلّ ما فيه — وفيه وحده تُتَّخذ القرارات.
+ */
 export default function ProviderOrdersPage() {
   const queryClient = useQueryClient();
-  const [view, setView] = useState<Exclude<BookingView, "all">>("current");
-  const [page, setPage] = useState(1);
+
+  const [group, setGroup] = useState<OrderGroup>("all");
   const [search, setSearch] = useState("");
-  const deferredSearch = useDeferredValue(search.trim());
-  const [status, setStatus] = useState("all");
-  const [paymentStatus, setPaymentStatus] = useState("all");
-  const [paymentMethod, setPaymentMethod] = useState("all");
-  const [sortBy, setSortBy] = useState("createdAt");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [period, setPeriod] = useState<PeriodKey>("all");
+  const [sort, setSort] = useState<OrderSortKey>("newest");
+  const [page, setPage] = useState(1);
+
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<Booking | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [pendingAction, setPendingAction] = useState<{ id: string; action: string } | null>(null);
 
-  const filters: BookingFilters = {
-    view,
-    page,
-    limit: PAGE_SIZE,
-    search: deferredSearch || undefined,
-    status: status !== "all" ? status : undefined,
-    paymentStatus: paymentStatus !== "all" ? paymentStatus : undefined,
-    paymentMethod: paymentMethod !== "all" ? paymentMethod : undefined,
-    sortBy,
-    sortOrder,
-    dateFrom: dateFrom || undefined,
-    dateTo: dateTo || undefined,
-  };
+  const deferredSearch = useDeferredValue(search.trim());
+  const dateFrom = periodStart(period);
+  const scope = { search: deferredSearch || undefined, dateFrom };
 
-  const bookingsQuery = useQuery({
-    queryKey: providerQueryKeys.bookings(filters),
-    queryFn: () => getProviderBookings(filters),
+  const ordersQuery = useQuery({
+    queryKey: providerQueryKeys.orders({ ...scope, group, sort, page, limit: ORDERS_PAGE_SIZE }),
+    queryFn: () => getProviderOrders({ ...scope, group, sort, page, limit: ORDERS_PAGE_SIZE }),
     placeholderData: keepPreviousData,
   });
 
-  const weeklyQuery = useQuery({
-    queryKey: providerQueryKeys.weeklyBookings,
-    queryFn: getProviderWeeklyActivity,
+  // عدّادات الرقاقات وبطاقات المؤشّرات تُحسب على النطاق (بحث + فترة) بلا
+  // فلتر مجموعة، فتبقى ثابتة بينما يتنقّل المزوّد بين المجموعات.
+  const summaryQuery = useQuery({
+    queryKey: providerQueryKeys.ordersSummary(scope),
+    queryFn: () => getProviderOrdersSummary(scope),
+    placeholderData: keepPreviousData,
   });
 
-  const detailsQuery = useQuery({
-    queryKey: providerQueryKeys.bookingDetails(selectedBookingId ?? ""),
-    queryFn: () => getBookingDetails(selectedBookingId!),
-    enabled: Boolean(selectedBookingId),
+  /**
+   * الطلبات النشطة تُطلب على حدة لا تُقرأ من القائمة المعروضة.
+   *
+   * بثّ الموقع كان يتغذّى من `bookings` الصفحة، وذلك مقبول حين كان العرض
+   * الافتراضي هو «الطلبات الحالية» وحدها. مع سجلٍّ يبدأ بـ«كل الطلبات»
+   * ويُفلتَر بحرّية، كان فلترُ المزوّد إلى «مكتملة» — أو تصفّحه إلى الصفحة
+   * الثانية — يُطفئ البثّ في منتصف مهمّة جارية بلا أيّ أثر مرئي، فيتجمّد
+   * موقع الفنّي على خريطة العميل.
+   */
+  const activeOrdersQuery = useQuery({
+    queryKey: providerQueryKeys.orders({ group: "active", page: 1, limit: 50 }),
+    queryFn: () => getProviderOrders({ group: "active", page: 1, limit: 50 }),
   });
 
-  const refreshBookings = () => {
+  const summary = summaryQuery.data ?? EMPTY_ORDERS_SUMMARY;
+  const orders = ordersQuery.data?.data ?? [];
+  const pagination = ordersQuery.data?.pagination;
+
+  const refreshOrders = () => {
     void queryClient.invalidateQueries({ queryKey: providerQueryKeys.bookingsRoot });
-    void queryClient.invalidateQueries({ queryKey: providerQueryKeys.weeklyBookings });
     void queryClient.invalidateQueries({ queryKey: providerQueryKeys.dashboardAllStats });
-    if (selectedBookingId) void queryClient.invalidateQueries({ queryKey: providerQueryKeys.bookingDetails(selectedBookingId) });
+    if (selectedOrderId) {
+      void queryClient.invalidateQueries({ queryKey: providerQueryKeys.bookingDetails(selectedOrderId) });
+    }
   };
 
   const statusMutation = useMutation({
-    mutationFn: ({ id, status: nextStatus }: { id: string; status: string }) => updateBookingStatus(id, nextStatus),
+    mutationFn: ({ id, status }: { id: string; status: string }) => updateBookingStatus(id, status),
     onSuccess: () => {
       toast.success("تم تحديث حالة الطلب");
-      refreshBookings();
+      refreshOrders();
     },
     onError: (error) => toast.error(getErrorMessage(error)),
     onSettled: () => setPendingAction(null),
@@ -168,15 +128,31 @@ export default function ProviderOrdersPage() {
       toast.success("تم إلغاء الطلب");
       setCancelTarget(null);
       setCancelReason("");
-      refreshBookings();
+      refreshOrders();
     },
     onError: (error) => toast.error(getErrorMessage(error)),
     onSettled: () => setPendingAction(null),
   });
 
-  const runStatusAction = (booking: Booking, action: string, nextStatus: string) => {
-    setPendingAction({ id: booking._id, action });
-    statusMutation.mutate({ id: booking._id, status: nextStatus });
+  const changeGroup = (nextGroup: OrderGroup) => {
+    setGroup(nextGroup);
+    setPage(1);
+    // مفاتيح الفرز ليست واحدة في كل المجموعات: «الموعد الأقرب» لا معنى له
+    // خارج المواعيد، و«الأحدث» لا معنى له داخلها.
+    const allowed = sortOptionsFor(nextGroup).map((option) => option.value);
+    if (!allowed.includes(sort)) setSort(defaultSortFor(nextGroup));
+  };
+
+  const runStatusAction = (order: Booking, actionKey: string, nextStatus: string) => {
+    setPendingAction({ id: order._id, action: actionKey });
+    statusMutation.mutate({ id: order._id, status: nextStatus });
+  };
+
+  const requestCancel = (order: Booking) => {
+    // نافذة التفاصيل تُغلق قبل فتح نافذة التأكيد: حواران متراكبان يتنازعان
+    // حبس التركيز، ويترك ذلك لوحة المفاتيح عالقةً خلف الطبقة العليا.
+    setSelectedOrderId(null);
+    setCancelTarget(order);
   };
 
   const submitCancellation = () => {
@@ -189,129 +165,105 @@ export default function ProviderOrdersPage() {
     cancelMutation.mutate({ id: cancelTarget._id, reason });
   };
 
-  const resetFilters = () => {
+  const resetView = () => {
     setSearch("");
-    setStatus("all");
-    setPaymentStatus("all");
-    setPaymentMethod("all");
-    setSortBy("createdAt");
-    setSortOrder("desc");
-    setDateFrom("");
-    setDateTo("");
+    setPeriod("all");
+    setGroup("all");
+    setSort("newest");
     setPage(1);
   };
 
-  const changeView = (nextView: Exclude<BookingView, "all">) => {
-    setView(nextView);
-    setStatus("all");
-    setPage(1);
-  };
-
-  const weeklyPerformance = useMemo(() => {
-    const weeklyBookings = weeklyQuery.data ?? [];
-    return Array.from({ length: 7 }, (_, index) => {
-      const date = new Date();
-      date.setHours(0, 0, 0, 0);
-      date.setDate(date.getDate() - (6 - index));
-      const nextDate = new Date(date);
-      nextDate.setDate(nextDate.getDate() + 1);
-      const dayBookings = weeklyBookings.filter((booking) => {
-        const createdAt = new Date(booking.createdAt);
-        return createdAt >= date && createdAt < nextDate;
-      });
-      return {
-        day: formatWeekdayShort(date),
-        orders: dayBookings.length,
-        revenue: dayBookings.filter((booking) => booking.status === "completed").reduce((sum, booking) => sum + (booking.payableAmount ?? 0), 0),
-      };
-    });
-  }, [weeklyQuery.data]);
-
-  const bookings = bookingsQuery.data?.data ?? [];
-  const pagination = bookingsQuery.data?.pagination;
-  const facets = bookingsQuery.data?.facets;
-  const completedCount = facets?.statusCounts.find((item) => item._id === "completed")?.count ?? 0;
-  const cancelledCount = (facets?.statusCounts.find((item) => item._id === "cancelled")?.count ?? 0) + (facets?.statusCounts.find((item) => item._id === "rejected")?.count ?? 0);
-  const details = detailsQuery.data;
-
-  // كل فلتر فعّال يصبح رقاقة مرئية قابلة للإزالة. بدونها كان المزوّد يترك
-  // نطاق تاريخ مفعّلاً دون أن يراه ثم يظنّ أن طلباته اختفت.
-  const chips: ActiveFilterChip[] = [
-    search && { key: "search", label: `بحث: ${search}`, onRemove: () => { setSearch(""); setPage(1); } },
-    status !== "all" && { key: "status", label: `الحالة: ${STATUS_MAP[status]?.label ?? status}`, onRemove: () => { setStatus("all"); setPage(1); } },
-    paymentStatus !== "all" && { key: "paymentStatus", label: `الدفع: ${PAYMENT_STATUS_LABELS[paymentStatus]}`, onRemove: () => { setPaymentStatus("all"); setPage(1); } },
-    paymentMethod !== "all" && { key: "paymentMethod", label: `الوسيلة: ${PAYMENT_METHOD_READ_LABELS[paymentMethod] ?? paymentMethod}`, onRemove: () => { setPaymentMethod("all"); setPage(1); } },
-    dateFrom && { key: "dateFrom", label: `من: ${dateFrom}`, onRemove: () => { setDateFrom(""); setPage(1); } },
-    dateTo && { key: "dateTo", label: `إلى: ${dateTo}`, onRemove: () => { setDateTo(""); setPage(1); } },
-    sortBy !== "createdAt" && { key: "sortBy", label: `الفرز: ${SORT_LABELS[sortBy]}`, onRemove: () => { setSortBy("createdAt"); setPage(1); } },
-    sortOrder !== "desc" && { key: "sortOrder", label: ORDER_LABELS.asc, onRemove: () => { setSortOrder("desc"); setPage(1); } },
-  ].filter(Boolean) as ActiveFilterChip[];
-  const hasFilters = chips.length > 0;
-  const emptyIcon = view === "appointments" ? CalendarClock : view === "history" ? History : ClipboardList;
+  const isFiltered = Boolean(deferredSearch) || period !== "all" || group !== "all";
+  const groupLabel = useMemo(
+    () => GROUPS.find((item) => item.value === group)?.label ?? "الطلبات",
+    [group]
+  );
 
   return (
-    <div className="space-y-6 animate-fade-in-up">
+    <div className="flex flex-col gap-6 animate-fade-in-up">
       <div className="grid grid-cols-2 gap-3 min-[1366px]:grid-cols-4">
-        <StatCard title="إجمالي النتائج" value={pagination?.total ?? 0} icon={ClipboardList} />
-        <StatCard title="الطلبات المكتملة" value={completedCount} icon={CheckCircle2} tone="success" />
-        <StatCard title="المواعيد المجدولة" value={facets?.totals.scheduled ?? 0} icon={CalendarClock} tone="info" />
-        <StatCard title="الملغاة والمرفوضة" value={cancelledCount} icon={XCircle} tone="danger" />
+        <StatCard
+          title="كل الطلبات"
+          value={summary.total}
+          icon={ClipboardList}
+          tone="info"
+          loading={summaryQuery.isLoading}
+        />
+        <StatCard
+          title="قيد التنفيذ"
+          value={summary.active}
+          icon={Wrench}
+          tone="warning"
+          loading={summaryQuery.isLoading}
+        />
+        <StatCard
+          title="مكتملة"
+          value={summary.completed}
+          icon={CheckCircle2}
+          tone="success"
+          loading={summaryQuery.isLoading}
+        />
+        <StatCard
+          title="دخل الطلبات المكتملة"
+          value={<Money value={summary.completedRevenue} />}
+          icon={Wallet}
+          tone="primary"
+          loading={summaryQuery.isLoading}
+        />
       </div>
 
       {/* بثّ الموقع: يظهر فقط حين توجد طلبات نشطة تستقبله */}
-      <LocationBroadcastCard bookings={bookings} />
+      <LocationBroadcastCard bookings={activeOrdersQuery.data?.data ?? []} />
 
-      <div role="tablist" aria-label="عروض الطلبات" className="flex gap-6 border-b border-border/60 overflow-x-auto">
-        {TABS.map((tab) => (
-          <TabButton key={tab.value} label={tab.label} active={view === tab.value} onClick={() => changeView(tab.value)} />
-        ))}
-      </div>
+      <OrdersToolbar
+        search={search}
+        onSearchChange={(value) => {
+          setSearch(value);
+          setPage(1);
+        }}
+        group={group}
+        onGroupChange={changeGroup}
+        period={period}
+        onPeriodChange={(value) => {
+          setPeriod(value);
+          setPage(1);
+        }}
+        sort={sort}
+        onSortChange={(value) => {
+          setSort(value);
+          setPage(1);
+        }}
+        summary={summary}
+        loadingCounts={summaryQuery.isLoading}
+      />
 
-      <DataToolbar
-        searchValue={search}
-        onSearchChange={(value) => { setSearch(value); setPage(1); }}
-        searchPlaceholder="ابحث برقم الطلب أو العميل أو الخدمة أو العنوان"
-        searchLabel="بحث في الطلبات"
-        chips={chips}
-        onReset={resetFilters}
-        resultCount={pagination?.total}
-      >
-        <Select aria-label="حالة الطلب" value={status} onValueChange={(value) => { setStatus(value); setPage(1); }} options={STATUS_OPTIONS} />
-        <Select aria-label="حالة الدفع" value={paymentStatus} onValueChange={(value) => { setPaymentStatus(value); setPage(1); }} options={PAYMENT_STATUS_OPTIONS} />
-        <Select aria-label="طريقة الدفع" value={paymentMethod} onValueChange={(value) => { setPaymentMethod(value); setPage(1); }} options={PAYMENT_METHOD_OPTIONS} />
-        <Select aria-label="الفرز حسب" value={sortBy} onValueChange={(value) => { setSortBy(value); setPage(1); }} options={SORT_OPTIONS} />
-        <Select aria-label="اتجاه الفرز" value={sortOrder} onValueChange={(value) => { setSortOrder(value as "asc" | "desc"); setPage(1); }} options={ORDER_OPTIONS} />
-        <div className="col-span-2 flex gap-2 md:col-span-1">
-          <Input type="date" value={dateFrom} onChange={(event) => { setDateFrom(event.target.value); setPage(1); }} aria-label="من تاريخ" />
-          <Input type="date" value={dateTo} onChange={(event) => { setDateTo(event.target.value); setPage(1); }} aria-label="إلى تاريخ" />
-        </div>
-      </DataToolbar>
-
-      <WeeklyPerformanceChart data={weeklyPerformance} />
-
-      {bookingsQuery.isError ? (
+      {ordersQuery.isError ? (
         <ErrorState
           title="تعذّر تحميل الطلبات"
-          description="لم يستجب الخادم لطلب قائمة الحجوزات."
-          onRetry={() => void bookingsQuery.refetch()}
-          isRetrying={bookingsQuery.isFetching}
+          description="لم يستجب الخادم لطلب قائمة الطلبات."
+          onRetry={() => void ordersQuery.refetch()}
+          isRetrying={ordersQuery.isFetching}
         />
-      ) : bookingsQuery.isLoading ? (
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+      ) : ordersQuery.isLoading ? (
+        <div className="flex flex-col gap-2">
           {Array.from({ length: 6 }, (_, index) => (
-            <Skeleton key={index} className="h-64 rounded-xl" />
+            <Skeleton key={index} className="h-[4.75rem] rounded-xl" />
           ))}
         </div>
-      ) : bookings.length === 0 ? (
+      ) : orders.length === 0 ? (
         <Card className="border-dashed">
           <EmptyState
-            icon={emptyIcon}
-            title={hasFilters ? "لا توجد نتائج مطابقة للفلاتر" : "لا توجد طلبات في هذا العرض"}
-            description={hasFilters ? "جرّب توسيع نطاق البحث أو إزالة بعض الفلاتر." : "ستظهر هنا طلبات العملاء فور وصولها."}
+            icon={isFiltered ? SearchX : ClipboardList}
+            title={isFiltered ? "لا يوجد طلب يطابق بحثك" : "لا توجد طلبات بعد"}
+            description={
+              isFiltered
+                ? `لا طلبات ضمن «${groupLabel}» في هذه الفترة. جرّب فترة أوسع أو امسح البحث.`
+                : "ستظهر هنا كل طلبات العملاء ومواعيدهم فور وصولها، مرتّبة بأيّامها."
+            }
             action={
-              hasFilters ? (
-                <Button type="button" variant="outline" size="sm" onClick={resetFilters}>
-                  مسح الفلاتر
+              isFiltered ? (
+                <Button type="button" variant="outline" size="sm" onClick={resetView}>
+                  عرض كل الطلبات
                 </Button>
               ) : undefined
             }
@@ -319,76 +271,44 @@ export default function ProviderOrdersPage() {
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {bookings.map((booking) => (
-              <BookingCard
-                key={booking._id}
-                booking={booking}
-                onViewDetails={() => setSelectedBookingId(booking._id)}
-                onStart={() => runStatusAction(booking, "start", "in_progress")}
-                onComplete={() => runStatusAction(booking, "complete", "completed")}
-                onCancel={() => setCancelTarget(booking)}
-                pendingAction={pendingAction?.id === booking._id ? pendingAction.action : undefined}
-              />
-            ))}
+          <div aria-busy={ordersQuery.isFetching}>
+            <OrdersList
+              orders={orders}
+              onOpen={setSelectedOrderId}
+              // الفرز بالمبلغ يكسر التسلسل الزمني، وعناوين الأيام فوقه تكذب
+              groupByDay={sort !== "amount"}
+              useScheduledDate={group === "scheduled"}
+            />
           </div>
+
           <Pagination
             page={pagination?.page ?? 1}
             pages={pagination?.pages ?? 1}
             total={pagination?.total}
             onPageChange={setPage}
-            disabled={bookingsQuery.isFetching}
+            disabled={ordersQuery.isFetching}
           />
         </>
       )}
 
-      <Dialog open={Boolean(selectedBookingId)} onOpenChange={(open) => !open && setSelectedBookingId(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>تفاصيل الطلب</DialogTitle>
-            <DialogDescription>بيانات الطلب كما هي مسجّلة في النظام</DialogDescription>
-          </DialogHeader>
-          {detailsQuery.isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }, (_, index) => <Skeleton key={index} className="h-6 w-full" />)}
-            </div>
-          ) : detailsQuery.isError || !details ? (
-            <ErrorState compact description="تعذّر جلب تفاصيل هذا الطلب." onRetry={() => void detailsQuery.refetch()} />
-          ) : (
-            <dl className="grid gap-3 text-sm">
-              <DetailRow label="رقم الطلب"><span dir="ltr" className="font-mono text-xs">{details.orderNumber}</span></DetailRow>
-              <DetailRow label="الحالة"><StatusBadge status={details.status} /></DetailRow>
-              <DetailRow label="الخدمة">{details.service?.name ?? "—"}</DetailRow>
-              <DetailRow label="العميل">{details.user?.fullName ?? "—"}</DetailRow>
-              {details.user?.phoneNumber && (
-                <DetailRow label="الهاتف"><a href={`tel:${details.user.phoneNumber}`} dir="ltr" className="text-primary hover:underline">{details.user.phoneNumber}</a></DetailRow>
-              )}
-              <DetailRow label="المبلغ"><Money value={details.payableAmount} className="font-bold" /></DetailRow>
-              <DetailRow label="الدفع">{PAYMENT_STATUS_LABELS[details.paymentStatus ?? ""] || details.paymentStatus || "—"}</DetailRow>
-              <DetailRow label="أُنشئ"><RelativeTime value={details.createdAt} /></DetailRow>
-              {details.isScheduled && details.scheduledAt && (
-                <DetailRow label="الموعد">{formatDateTime(details.scheduledAt)}</DetailRow>
-              )}
-              {details.userNotes && (
-                <div className="pt-1">
-                  <dt className="mb-1 text-muted-foreground">ملاحظات العميل</dt>
-                  <dd className="rounded-lg bg-secondary/40 p-3 leading-relaxed">{details.userNotes}</dd>
-                </div>
-              )}
-              {details.cancellationReason && (
-                <div className="pt-1">
-                  <dt className="mb-1 text-muted-foreground">سبب الإلغاء</dt>
-                  <dd className="rounded-lg border border-danger/20 bg-danger/10 p-3 text-danger-soft">{details.cancellationReason}</dd>
-                </div>
-              )}
-            </dl>
-          )}
-        </DialogContent>
-      </Dialog>
+      <OrderDetailsDialog
+        orderId={selectedOrderId}
+        onClose={() => setSelectedOrderId(null)}
+        onStatusChange={runStatusAction}
+        onRequestCancel={requestCancel}
+        pendingAction={
+          pendingAction && pendingAction.id === selectedOrderId ? pendingAction.action : undefined
+        }
+      />
 
       <ConfirmDialog
         open={Boolean(cancelTarget)}
-        onOpenChange={(open) => { if (!open) { setCancelTarget(null); setCancelReason(""); } }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCancelTarget(null);
+            setCancelReason("");
+          }
+        }}
         title="إلغاء الطلب"
         description="يُحفظ السبب في سجل الطلب ويُبلَّغ به العميل. لا يمكن التراجع عن هذا الإجراء."
         confirmLabel="تأكيد الإلغاء"
@@ -414,15 +334,6 @@ export default function ProviderOrdersPage() {
           </p>
         </div>
       </ConfirmDialog>
-    </div>
-  );
-}
-
-function DetailRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="text-end">{children}</dd>
     </div>
   );
 }

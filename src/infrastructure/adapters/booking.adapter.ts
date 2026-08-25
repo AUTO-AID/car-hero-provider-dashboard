@@ -32,6 +32,8 @@ export function normalizeBooking(order: BookingDto): Booking {
     status: getString(order.status) ?? "pending",
     payableAmount: amount,
     total: amount,
+    totalAmount: getNumber(order.totalAmount) ?? amount,
+    discountAmount: getNumber(order.discountAmount) ?? 0,
     createdAt: getDateLike(order.createdAt) ?? new Date().toISOString(),
     scheduledAt: getDateLike(order.scheduledAt),
     isScheduled: getBoolean(order.isScheduled),
@@ -40,6 +42,7 @@ export function normalizeBooking(order: BookingDto): Booking {
     paymentStatus: getString(order.paymentStatus),
     paymentMethod: getString(order.paymentMethod),
     cancellationReason: getString(order.cancellationReason),
+    cancelledBy: getString(order.cancelledBy),
     location: isRecord(locationSource) ? (locationSource as unknown as Booking["location"]) : undefined,
     service: { name: getString(service.name) },
     user: {
@@ -47,6 +50,14 @@ export function normalizeBooking(order: BookingDto): Booking {
       phoneNumber: getString(user.phoneNumber),
     },
     vehicle: isRecord(order.vehicle) ? (order.vehicle as Booking["vehicle"]) : undefined,
+
+    // أختام المراحل — تُقرأ صراحةً لا بالانتشار وحده، حتى يراها المُصرِّف
+    // ويبقى الخطّ الزمني في نافذة التفاصيل مربوطاً بعقدٍ مكتوب.
+    acceptedAt: getDateLike(order.acceptedAt),
+    arrivedAt: getDateLike(order.arrivedAt),
+    startedAt: getDateLike(order.startedAt),
+    completedAt: getDateLike(order.completedAt),
+    cancelledAt: getDateLike(order.cancelledAt),
   };
 }
 

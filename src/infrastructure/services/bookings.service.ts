@@ -4,95 +4,145 @@ import { api } from "../api/client";
 import { isRecord } from "../api/types";
 import { unwrapApiData } from "../api/unwrap";
 
-export type BookingView = "current" | "history" | "appointments" | "all";
+/**
+ * مجموعات الطلبات كما يفكّر بها صاحب الورشة — لا كما تُسمّى في قاعدة البيانات.
+ *
+ * كانت الشاشة تقسّم الطلبات إلى ثلاثة «عروض» (`current`/`appointments`/`history`)
+ * موزّعة على نقطتَي نهاية مختلفتين، وفوقها قائمة حالات من تسعة خيارات — فكان
+ * على المزوّد أن يعرف الفرق بين «تم التعيين» و«في الطريق» ليجد طلباً.
+ * المجموعات الخمس تغطّي المعنى كلّه بنقرة واحدة، ونقطة النهاية صارت واحدة.
+ */
+export type OrderGroup = "all" | "active" | "scheduled" | "completed" | "cancelled";
 
-export interface BookingFilters {
-  view?: BookingView;
+export type OrderSortKey = "newest" | "oldest" | "soonest" | "latest" | "amount";
+
+export interface OrderQuery {
+  group?: OrderGroup;
   page?: number;
   limit?: number;
   search?: string;
-  status?: string;
-  paymentStatus?: string;
-  paymentMethod?: string;
+  /** ISO — يُطابَق على `createdAt` في الخادم */
   dateFrom?: string;
   dateTo?: string;
-  sortBy?: string;
-  sortOrder?: "asc" | "desc";
+  sort?: OrderSortKey;
 }
 
-const CURRENT_STATUSES = [
+/** الطلبات التي ما تزال على الطاولة: وصلت ولم تُغلق بعد. */
+export const ACTIVE_STATUSES = [
   "pending",
   "accepted",
   "provider_assigned",
   "provider_en_route",
   "provider_arrived",
   "in_progress",
-];
+] as const;
 
-const HISTORY_STATUSES = ["completed", "cancelled", "rejected"];
+export const CANCELLED_STATUSES = ["cancelled", "rejected"] as const;
 
-function statusesForView(view: BookingView, status?: string) {
-  if (status && status !== "all") return status;
-  if (view === "current") return CURRENT_STATUSES.join(",");
-  if (view === "history") return HISTORY_STATUSES.join(",");
-  return undefined;
+const SORTS: Record<OrderSortKey, { sortBy: string; sortOrder: "asc" | "desc" }> = {
+  newest: { sortBy: "createdAt", sortOrder: "desc" },
+  oldest: { sortBy: "createdAt", sortOrder: "asc" },
+  soonest: { sortBy: "scheduledAt", sortOrder: "asc" },
+  latest: { sortBy: "scheduledAt", sortOrder: "desc" },
+  amount: { sortBy: "amount", sortOrder: "desc" },
+};
+
+/** ترجمة المجموعة إلى الوسائط التي يفهمها `GET /orders`. */
+function groupParams(group: OrderGroup) {
+  switch (group) {
+    case "active":
+      return { statuses: ACTIVE_STATUSES.join(",") };
+    case "scheduled":
+      // `isScheduled=true` على `/orders` يعطي ما تعطيه `/bookings` بالضبط،
+      // فسقطت الحاجة إلى نقطة نهاية ثانية ومسار شيفرة ثانٍ معها.
+      return { isScheduled: "true" };
+    case "completed":
+      return { statuses: "completed" };
+    case "cancelled":
+      return { statuses: CANCELLED_STATUSES.join(",") };
+    default:
+      return {};
+  }
 }
 
-export async function getProviderBookings(filters: BookingFilters = {}): Promise<{
+export interface OrdersPage {
   data: Booking[];
   pagination?: BookingPagination;
   facets?: BookingFacets;
-}> {
-  const { view = "current", status, ...rest } = filters;
-  const endpoint = view === "appointments" ? "/bookings" : "/orders";
-  const response = await api.get(endpoint, {
+}
+
+export async function getProviderOrders(query: OrderQuery = {}): Promise<OrdersPage> {
+  const { group = "all", sort = "newest", page = 1, limit = 15, search, dateFrom, dateTo } = query;
+
+  const response = await api.get("/orders", {
     params: {
-      ...rest,
-      statuses: statusesForView(view, status),
-      status: status && status !== "all" ? status : undefined,
+      page,
+      limit,
+      search: search || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+      ...SORTS[sort],
+      ...groupParams(group),
     },
   });
 
   const payload = unwrapApiData<unknown>(response.data);
-  const orders = getOrdersFromPayload(payload);
 
   return {
-    data: orders.map(normalizeBooking),
+    data: getOrdersFromPayload(payload).map(normalizeBooking),
     pagination: getPayloadValue<BookingPagination>(payload, "pagination"),
     facets: getPayloadValue<BookingFacets>(payload, "facets"),
   };
 }
 
-export async function getProviderWeeklyActivity() {
-  const dateFrom = new Date();
-  dateFrom.setHours(0, 0, 0, 0);
-  dateFrom.setDate(dateFrom.getDate() - 6);
-  const dateTo = new Date();
-  const limit = 100;
-  const firstPage = await getProviderBookings({
-    view: "all",
-    page: 1,
-    limit,
-    dateFrom: dateFrom.toISOString(),
-    dateTo: dateTo.toISOString(),
-  });
-  const pages = firstPage.pagination?.pages ?? 1;
+export interface OrdersSummary {
+  total: number;
+  active: number;
+  scheduled: number;
+  completed: number;
+  cancelled: number;
+  /** إيراد الطلبات المكتملة وحدها — لا مجموع كل ما مرّ في القائمة */
+  completedRevenue: number;
+}
 
-  if (pages <= 1) return firstPage.data;
+export const EMPTY_ORDERS_SUMMARY: OrdersSummary = {
+  total: 0,
+  active: 0,
+  scheduled: 0,
+  completed: 0,
+  cancelled: 0,
+  completedRevenue: 0,
+};
 
-  const remainingPages = await Promise.all(
-    Array.from({ length: pages - 1 }, (_, index) =>
-      getProviderBookings({
-        view: "all",
-        page: index + 2,
-        limit,
-        dateFrom: dateFrom.toISOString(),
-        dateTo: dateTo.toISOString(),
-      }),
-    ),
-  );
+/**
+ * عدّادات المجموعات الخمس ضمن نطاق البحث والفترة الحاليَّين.
+ *
+ * تُطلب بلا فلتر حالة وبـ `limit=1`: مراحل `$facet` في الخادم تُحسب على
+ * المطابقة كاملةً لا على الصفحة، فرقاقة «مكتملة ٣١» تبقى صحيحة بينما
+ * المعروض أمامك هو مجموعة «جارية». ولو حُسبت من الصفحة نفسها لتغيّر كل
+ * عدّاد كلّما نقر المزوّد رقاقةً أخرى — وهو ما يجعل الأرقام تبدو معطوبة.
+ */
+export async function getProviderOrdersSummary(
+  query: Pick<OrderQuery, "search" | "dateFrom" | "dateTo"> = {},
+): Promise<OrdersSummary> {
+  const { facets, pagination } = await getProviderOrders({ ...query, group: "all", page: 1, limit: 1 });
+  if (!facets) return { ...EMPTY_ORDERS_SUMMARY, total: pagination?.total ?? 0 };
 
-  return [firstPage, ...remainingPages].flatMap((page) => page.data);
+  const countOf = (statuses: readonly string[]) =>
+    facets.statusCounts
+      .filter((entry) => statuses.includes(entry._id))
+      .reduce((sum, entry) => sum + (entry.count ?? 0), 0);
+
+  const completedFacet = facets.statusCounts.find((entry) => entry._id === "completed");
+
+  return {
+    total: pagination?.total ?? 0,
+    active: countOf(ACTIVE_STATUSES),
+    scheduled: facets.totals?.scheduled ?? 0,
+    completed: completedFacet?.count ?? 0,
+    cancelled: countOf(CANCELLED_STATUSES),
+    completedRevenue: completedFacet?.revenue ?? 0,
+  };
 }
 
 export const getBookingDetails = (bookingId: string) =>
@@ -129,4 +179,3 @@ function getOrdersFromPayload(payload: unknown): BookingDto[] {
 function getPayloadValue<T>(payload: unknown, key: string): T | undefined {
   return isRecord(payload) && key in payload ? (payload[key] as T) : undefined;
 }
-

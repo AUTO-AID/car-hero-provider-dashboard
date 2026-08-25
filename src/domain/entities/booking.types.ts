@@ -11,6 +11,8 @@ export interface GeoLocation {
   coordinates: [number, number];
 }
 
+export type DateLike = string | number | Date;
+
 export interface Booking {
   _id: string;
   id?: string;
@@ -18,18 +20,33 @@ export interface Booking {
   status: string;
   payableAmount?: number;
   total?: number;
-  createdAt: string | number | Date;
-  scheduledAt?: string | number | Date;
+  totalAmount?: number;
+  discountAmount?: number;
+  createdAt: DateLike;
+  scheduledAt?: DateLike;
   isScheduled?: boolean;
   address?: string;
   userNotes?: string;
   paymentStatus?: string;
   paymentMethod?: string;
   cancellationReason?: string;
+  cancelledBy?: string;
   service?: { name?: string };
   user?: { fullName?: string; phoneNumber?: string };
   vehicle?: VehicleInfo;
   location?: GeoLocation;
+
+  /**
+   * أختام المراحل. الخادم يسجّلها على المستند منذ البداية
+   * (`acceptedAt` … `cancelledAt` في `mapToEntity`) ولم تكن اللوحة تقرأ منها
+   * شيئاً، فكان «تاريخ الطلب» عندها لحظةً واحدة هي الإنشاء. هي مصدر
+   * الخطّ الزمني في نافذة التفاصيل — بلا نداء إضافي للخادم.
+   */
+  acceptedAt?: DateLike;
+  arrivedAt?: DateLike;
+  startedAt?: DateLike;
+  completedAt?: DateLike;
+  cancelledAt?: DateLike;
 }
 
 export interface BookingFacets {

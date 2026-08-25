@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getProviderProfile } from "@/infrastructure/services/profile.service";
 import { getProviderDashboardAllStats } from "@/infrastructure/services/dashboard.service";
-import { getProviderBookings } from "@/infrastructure/services/bookings.service";
+import { getProviderOrders } from "@/infrastructure/services/bookings.service";
 import { providerQueryKeys } from "@/application/services/prefetch";
 import { RevenueStat, ServicePerformance } from "@/domain/entities/dashboard.types";
 import { OverviewHeader } from "./components/overview-header";
@@ -45,8 +45,8 @@ export default function ProviderDashboardHome() {
   const svcsPerformance: ServicePerformance[] = dashboardStats?.servicesPerformance ?? [];
 
   const { data: bookingsData } = useQuery({
-    queryKey: providerQueryKeys.bookings({ view: "current", page: 1, limit: 3 }),
-    queryFn: () => getProviderBookings({ view: "current", page: 1, limit: 3 }),
+    queryKey: providerQueryKeys.orders({ group: "active", page: 1, limit: 3 }),
+    queryFn: () => getProviderOrders({ group: "active", page: 1, limit: 3 }),
   });
   const recentBookings = (bookingsData?.data ?? []).slice(0, 3);
 

@@ -76,7 +76,6 @@ export function RealTimeNotificationProvider({ children }: { children: React.Rea
 
   const invalidateOrderData = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: providerQueryKeys.bookingsRoot });
-    void queryClient.invalidateQueries({ queryKey: providerQueryKeys.weeklyBookings });
     void queryClient.invalidateQueries({ queryKey: providerQueryKeys.dashboardAllStats });
     void queryClient.invalidateQueries({ queryKey: providerQueryKeys.wallet });
   }, [queryClient]);
