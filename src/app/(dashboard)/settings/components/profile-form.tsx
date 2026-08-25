@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { MapPin, Pencil, Phone, Save, Store, type LucideIcon } from "lucide-react";
+import { MapPin, Pencil, Phone, Save, Store, Users, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { providerQueryKeys } from "@/application/services/prefetch";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { TagInput } from "@/components/ui/tag-input";
 import { Textarea } from "@/components/ui/textarea";
 import { updateProviderLocation, updateProviderProfile } from "@/infrastructure/services/profile.service";
 import { LocationPicker, type LatLng } from "./location-picker";
@@ -16,6 +17,11 @@ import { LocationPicker, type LatLng } from "./location-picker";
 interface ProfileData {
   businessName: string;
   ownerName: string;
+  /** من نموذج التسجيل على الموقع — كانت تُحفظ ولا تظهر ولا تُعدَّل */
+  governorate: string;
+  coverageAreas: string[];
+  experienceYears: number;
+  techCount: number;
   /**
    * لا يُعرض ولا يُحرَّر — حقل البريد حُذف من الواجهة. تُعاد القيمة المحفوظة
    * كما هي في كل حفظ حتى لا يمحوها التحديث، ولا تُتحقَّق منها: بريدٌ قديم
@@ -87,6 +93,10 @@ export function ProfileForm({
 
   const update = (field: keyof ProfileData, value: string) =>
     setFormData((current) => ({ ...current, [field]: value }));
+
+  // حقل رقمي فارغ يعطي NaN، وإرساله يُسقط التحقّق في الخادم برسالة غامضة.
+  const updateNumber = (field: "experienceYears" | "techCount", value: string) =>
+    setFormData((current) => ({ ...current, [field]: Number(value) || 0 }));
 
   const initial = (normalized.businessName || "م").charAt(0);
 
@@ -236,6 +246,56 @@ export function ProfileForm({
         </div>
       </Section>
 
+      <Section
+        icon={Users}
+        title="نطاق عملك"
+        description="ما سجّلته عند التقديم على الموقع — عدّله متى تغيّر."
+      >
+        <div className="col-span-full">
+          <Field label="المناطق التي تخدمها" full>
+            <TagInput
+              value={formData.coverageAreas}
+              onChange={(next) => setFormData((current) => ({ ...current, coverageAreas: next }))}
+              placeholder="اكتب اسم المنطقة ثم اضغط Enter — مثال: المزة"
+              aria-label="المناطق التي تخدمها"
+            />
+          </Field>
+        </div>
+
+        <Field label="المحافظة">
+          <Input
+            value={formData.governorate}
+            onChange={(event) => update("governorate", event.target.value)}
+            maxLength={100}
+            className="h-11"
+          />
+        </Field>
+
+        <Field label="عدد الفنّيين لديك">
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={500}
+            value={formData.techCount}
+            onChange={(event) => updateNumber("techCount", event.target.value)}
+            className="h-11"
+          />
+        </Field>
+
+        <Field label="سنوات الخبرة" full>
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={80}
+            value={formData.experienceYears}
+            onChange={(event) => updateNumber("experienceYears", event.target.value)}
+            className="h-11"
+          />
+        </Field>
+      </Section>
+
       {/* شريط الحفظ ملتصق بأسفل الشاشة: النموذج أطول من الطية، وزرّ الحفظ
           في نهايته كان يتطلّب تمريراً كاملاً للعودة إليه بعد كل تعديل. */}
       <div className="sticky bottom-4 z-10">
@@ -281,8 +341,17 @@ function Section({
   );
 }
 
-function normalize(data: ProfileData) {
-  return Object.fromEntries(
-    Object.entries(data).map(([key, value]) => [key, value.trim()])
-  ) as unknown as ProfileData;
+/** التشذيب للنصوص وحدها: `Object.entries` يمرّ على المصفوفة والأرقام أيضاً. */
+function normalize(data: ProfileData): ProfileData {
+  return {
+    ...data,
+    businessName: data.businessName.trim(),
+    ownerName: data.ownerName.trim(),
+    email: data.email.trim(),
+    address: data.address.trim(),
+    city: data.city.trim(),
+    description: data.description.trim(),
+    governorate: data.governorate.trim(),
+    coverageAreas: data.coverageAreas.map((area) => area.trim()).filter(Boolean),
+  };
 }

@@ -61,6 +61,10 @@ export default function ProviderSettingsPage() {
         city: provider.city ?? "",
         address: provider.address ?? "",
         description: provider.description ?? "",
+        governorate: provider.governorate ?? "",
+        coverageAreas: provider.coverageAreas ?? [],
+        experienceYears: provider.experienceYears ?? 0,
+        techCount: provider.techCount ?? 0,
       }}
     />
   );

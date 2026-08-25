@@ -26,6 +26,16 @@ export interface ProviderProfile {
   city: string;
   /** GeoJSON: [longitude, latitude] — يغذّي `/providers/nearby` عبر فهرس 2dsphere */
   location?: { type?: string; coordinates?: [number, number] };
+
+  /**
+   * ما ملأه المزوّد في نموذج التسجيل على الموقع التعريفي. كان يُحفظ عند
+   * التقديم ثم لا يظهر في اللوحة ولا يستطيع صاحبه تعديله.
+   */
+  governorate?: string;
+  coverageAreas?: string[];
+  facilities?: string[];
+  experienceYears?: number;
+  techCount?: number;
   isApproved?: boolean;
   isActive?: boolean;
   /** حالة التوفّر التي يراها العملاء — `/providers/nearby` يُرجع `online` فقط */
