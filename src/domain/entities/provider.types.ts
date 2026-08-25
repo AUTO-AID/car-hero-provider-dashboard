@@ -34,6 +34,8 @@ export interface ProviderProfile {
   governorate?: string;
   coverageAreas?: string[];
   facilities?: string[];
+  /** أسماء ملفّات لا صور: نموذج الموقع يرسل {name,size,type} ولا يرفع الملفّ */
+  shopPhotos?: Array<{ name?: string; size?: number; type?: string }>;
   experienceYears?: number;
   techCount?: number;
   isApproved?: boolean;

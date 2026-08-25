@@ -45,10 +45,13 @@ export function ProfileForm({
   initialData,
   phone,
   initialCoords,
+  documentsSection,
 }: {
   initialData: ProfileData;
   phone?: string;
   initialCoords: LatLng | null;
+  /** يُمرَّر من الصفحة ليبقى ترتيب الأقسام معرَّفاً في مكان واحد */
+  documentsSection?: React.ReactNode;
 }) {
   const queryClient = useQueryClient();
   const [formData, setFormData] = useState(initialData);
@@ -295,6 +298,8 @@ export function ProfileForm({
           />
         </Field>
       </Section>
+
+      {documentsSection}
 
       {/* شريط الحفظ ملتصق بأسفل الشاشة: النموذج أطول من الطية، وزرّ الحفظ
           في نهايته كان يتطلّب تمريراً كاملاً للعودة إليه بعد كل تعديل. */}

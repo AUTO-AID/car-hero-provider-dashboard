@@ -6,6 +6,7 @@ import { ErrorState } from "@/components/ui/states";
 import { providerQueryKeys } from "@/application/services/prefetch";
 import { ProviderProfile } from "@/domain/entities/provider.types";
 import { getProviderProfile } from "@/infrastructure/services/profile.service";
+import { DocumentsSection } from "./components/documents-section";
 import { ProfileForm } from "./components/profile-form";
 
 /**
@@ -54,6 +55,12 @@ export default function ProviderSettingsPage() {
       key={provider.updatedAt ?? "profile"}
       phone={provider.phone ?? ""}
       initialCoords={hasCoords ? { lat, lng } : null}
+      documentsSection={
+        <DocumentsSection
+          documents={Array.isArray(provider.documents) ? provider.documents : []}
+          shopPhotos={Array.isArray(provider.shopPhotos) ? provider.shopPhotos : []}
+        />
+      }
       initialData={{
         businessName: provider.businessName ?? "",
         ownerName: provider.ownerName ?? "",
