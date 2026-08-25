@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Clock3, Pencil, Plus, Trash2, Wrench, X } from "lucide-react";
+import { Check, Clock3, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Money } from "@/components/ui/money";
 import { Switch } from "@/components/ui/switch";
 import { ServiceCatalogItem } from "@/domain/entities/provider.types";
+import { categoryMetaFor } from "@/domain/entities/service-catalog";
 import { cn } from "@/lib/utils";
 import { formatNumber } from "@/lib/format";
 
@@ -47,6 +48,10 @@ export function ServiceCard({
     !Number.isFinite(numericDraft) || numericDraft < 0 || numericDraft > MAX_PRICE;
 
   const name = service.nameAr || service.name;
+  // كل بطاقات الكتالوج كانت تحمل `Wrench` نفسه: تسع بطاقات برمز واحد، فالتمييز
+  // بينها يقع على النصّ وحده. الأيقونة واللون يأتيان الآن من فئة الخدمة.
+  const meta = categoryMetaFor(service.category);
+  const Icon = meta.icon;
 
   const startEditing = () => {
     setDraft(String(price));
@@ -69,8 +74,8 @@ export function ServiceCard({
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 gap-3">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
-              <Wrench className="size-5" aria-hidden />
+            <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl border", meta.bg, meta.color)}>
+              <Icon className="size-5" aria-hidden />
             </span>
             <div className="min-w-0">
               <h2 className="truncate text-[15px] font-bold text-foreground">{name}</h2>

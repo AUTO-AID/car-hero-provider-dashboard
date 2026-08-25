@@ -12,12 +12,18 @@ import { Select, optionsFromMap } from "@/components/ui/select";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
 import { getProviderProfile, getServiceCatalog, updateProviderServices } from "@/infrastructure/services/profile.service";
 import { ServiceCatalogItem } from "@/domain/entities/provider.types";
+import { SERVICE_CATEGORIES, categoryLabel } from "@/domain/entities/service-catalog";
 import { ServiceCard } from "./components/service-card";
 
 type Filter = "all" | "mine" | "enabled" | "disabled";
+/**
+ * الفلتر يُبنى من الكتالوج المشترك بدل نسخة ثالثة مكتوبة هنا: تلك النسخة كانت
+ * تعرض «مساعدة طريق» و«الصيانة» (فئتان لم تعودا في الكتالوج) وتُغفل الخدمات
+ * الثلاث الجديدة — فيختفي من الفلتر ما يظهر في الشبكة.
+ */
 const categoryLabels: Record<string, string> = {
-  all: "كل الفئات", roadside_assistance: "مساعدة طريق", towing: "السحب", battery: "البطارية",
-  tire: "الإطارات", fuel: "الوقود", lockout: "الأقفال", maintenance: "الصيانة", car_wash: "الغسيل", other: "أخرى",
+  all: "كل الفئات",
+  ...Object.fromEntries(SERVICE_CATEGORIES.map((id) => [id, categoryLabel(id)])),
 };
 const FILTER_LABELS: Record<Filter, string> = {
   all: "كل الكتالوج",
