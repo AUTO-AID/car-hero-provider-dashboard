@@ -23,8 +23,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("بيانات الدخول غير صحيحة");
       }
 
-      const role = (providerData.role ?? providerData.accountType).toLowerCase();
-      if (role !== "provider") {
+      // مصدر الحقيقة لكون الحساب مزوّدًا هو `accountType`: الـ backend يخزّن
+      // حسابات المزوّدين في `users` بـ accountType='provider' لكن حقل role
+      // الخام يبقى 'user' (الدور يُشتقّ من accountType عند التوثيق فقط).
+      // الاعتماد على role كان يرفض كل مزوّد سليم.
+      const accountType = (providerData.accountType ?? providerData.role ?? "").toLowerCase();
+      if (accountType !== "provider") {
         throw new Error("هذا الحساب ليس حساب مزود خدمة");
       }
 
