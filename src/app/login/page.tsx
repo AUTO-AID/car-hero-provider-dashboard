@@ -34,7 +34,7 @@ export default function LoginPage() {
     setFormError(null);
 
     try {
-      await login(phone.trim(), password);
+      await login(normalizeSyrianPhone(phone), password);
       toast.success("تم تسجيل الدخول بنجاح");
       router.push("/");
     } catch (error: unknown) {
@@ -108,7 +108,8 @@ export default function LoginPage() {
                   autoComplete="tel"
                   value={phone}
                   onChange={(event) => setPhone(event.target.value)}
-                  placeholder="+963991234567"
+                  placeholder="09XXXXXXXX"
+                  maxLength={10}
                   dir="ltr"
                   aria-invalid={formError ? true : undefined}
                   aria-describedby={formError ? "login-error" : undefined}
@@ -188,18 +189,46 @@ export default function LoginPage() {
   );
 }
 
+// الحقل يجمع الآن رقماً محلياً (09XXXXXXXX) بلا +963 — التطبيع هنا يماثل
+// normalizeSyrianPhone في الـ backend (core/utils/phone.util.ts) لأن
+// login.dto.ts يشترط الصيغة +963XXXXXXXXX حرفياً بلا أي تحويل من جهته.
+function normalizeSyrianPhone(input: string): string {
+  const digits = input.replace(/[^\d]/g, "");
+  if (/^09\d{8}$/.test(digits)) return `+963${digits.slice(1)}`;
+  if (/^9639\d{8}$/.test(digits)) return `+${digits}`;
+  return input.trim();
+}
+
+// الـ backend يردّ برسائل تسجيل الدخول بالإنجليزية دائماً (error-messages.constant.ts
+// و login.dto.ts لا يترجمان). نفس النمط المتّبع في car-hero-app-provider
+// (serverMessages.js) — خريطة تعريب محلية، وأي رسالة غير معروفة تمرّ كما هي.
+const AUTH_MESSAGE_MAP: Record<string, string> = {
+  "Invalid phone number or password": "رقم الهاتف أو كلمة المرور غير صحيحة",
+  "Please verify your account first": "حسابك غير مفعّل — تواصل مع الإدارة",
+  "Your account has been deactivated. Please contact support":
+    "حسابك معطّل حالياً — تواصل مع الإدارة",
+  "Unauthorized. Please login": "يرجى تسجيل الدخول",
+  "Invalid or expired refresh token": "انتهت الجلسة، يرجى تسجيل الدخول من جديد",
+  "Phone number is required": "أدخل رقم الهاتف",
+  "Password is required": "أدخل كلمة المرور",
+};
+
+function localizeAuthMessage(message: string): string {
+  return AUTH_MESSAGE_MAP[message] || message;
+}
+
 function getLoginErrorMessage(error: unknown) {
   if (typeof error === "object" && error && "response" in error) {
     const response = (
       error as { response?: { data?: { message?: string | string[] } } }
     ).response;
     const message = response?.data?.message;
-    if (Array.isArray(message)) return message[0] ?? "بيانات الدخول غير صحيحة";
-    if (message) return message;
+    if (Array.isArray(message)) return localizeAuthMessage(message[0] ?? "بيانات الدخول غير صحيحة");
+    if (message) return localizeAuthMessage(message);
   }
 
   if (error instanceof Error && error.message) {
-    return error.message;
+    return localizeAuthMessage(error.message);
   }
 
   return "بيانات الدخول غير صحيحة";
